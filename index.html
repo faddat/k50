@@ -3,6 +3,19 @@
     // GRAPH GENERATION
     var graph = {};
 
+	function randomColor() {
+    return `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`;
+}
+
+
+
+
+// In your restart function, replace the color function with randomColor
+node = node.enter().append("circle")
+    .attr("fill", randomColor)
+    .call(function(node) { node.transition().attr("r", 8); })
+    .merge(node);
+
     // Generates a complete graph kn
     function generateCompleteGraph(n) {
         // Number of vertices = n
@@ -137,7 +150,6 @@
     svg.attr("width", window.innerWidth)
        .attr("height", window.innerHeight);
 
-    // You may also need to update other parts of your D3.js code that depend on the width and height
 });
 
 	// When text label is clicked, increment (kn -> k(n+1))
