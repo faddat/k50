@@ -69,6 +69,8 @@
             link = g.append("g").attr("stroke", "#000").attr("stroke-width", .5).selectAll(".link"),
             node = g.append("g").attr("stroke", "#fff").attr("stroke-width", .5).selectAll(".node");
 
+		// Generate initial graph
+		generateCompleteGraph(69);
         restart();
 
         function restart() {
