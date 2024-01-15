@@ -1,68 +1,53 @@
-<!DOCTYPE html>
-<svg width="1920" height="1000"></svg>
-<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="https://d3js.org/d3.v6.min.js"></script>
 <script>
+    // GRAPH GENERATION
+    var graph = {};
 
-	// GRAPH GENERATION
+    // Generates a complete graph kn
+    function generateCompleteGraph(n) {
+        // Number of vertices = n
+        graph.vCount = n;
 
-	var graph = {};
+        // Number of edges (from Handshake Lemma)
+        graph.eCount = (1/2) * n * (n - 1);
 
-	// Generates a complete graph kn
-	function generateCompleteGraph(n) {
-		// Number of vertices = n
-		graph.vCount = n;
+        // Generate vertices
+        graph.nodes = new Array(n).fill().map((_, i) => ({id: i}));
 
-		// Number of edges (from Handshake Lemma)
-		graph.eCount = (1/2) * n * (n - 1);
+        // Generate edges
+        graph.links = [];
+        for (var u = 0; u < n; u++) {
+            for (var v = u + 1; v < n; v++) {
+                graph.links.push({"target": u, "source": v});
+            }
+        }
+    }
 
-		// Generate vertices
-		graph.nodes = [];
-		for (var i = 0; i < n; i++) {
-			graph.nodes.push({"id": i})
-		}
+    // Start with kn = 1
+    generateCompleteGraph(5);
 
-		// Generate edges
-		graph.links = [];
-		// Using Cartesian Product due to laziness
-		// it works, but generates a lot of useless "parallel edges".
-		// A better solution would be to generate C(n, 2) combinations.
-		for (var u = 0; u < n; u++) {
-			for (var v = 0; v < n; v++) {
-				if (u != v) {
-					graph.links.push({"target": u, "source": v})
-				}
-			}
-		}
-	}
+    // VIEW
+    var svg = d3.select("svg"),
+        width = +svg.attr("width"),
+        height = +svg.attr("height"),
+        color = d3.scaleOrdinal(d3.schemeCategory10);
 
-	// Start with kn = 1
-	generateCompleteGraph(5);
+    // Label
+    var text = svg.append("text")
+        .style("cursor", "pointer")
+        .attr("x", 50)
+        .attr("y", height-40)
+        .attr("font-family", "sans-serif")
+        .attr("font-size", "35px")
+        .text("Kn = " + graph.vCount)
 
-
-	// VIEW
-	// Based on Bostock's "Modifying a Force Layout II": https://bl.ocks.org/mbostock/0adcc447925ffae87975a3a81628a196
-
-	var svg = d3.select("svg"),
-			width = +svg.attr("width"),
-			height = +svg.attr("height"),
-			color = d3.scaleOrdinal(d3.schemeCategory10);
-
-	// Label
-	var text = svg.append("text")
-			.style("cursor", "pointer")
-			.attr("x", 50)
-			.attr("y", height-40)
-			.attr("font-family", "sans-serif")
-			.attr("font-size", "35px")
-			.text("Kn = " + graph.vCount)
-
-	var simulation = d3.forceSimulation(graph.nodes)
-			.force("charge", d3.forceManyBody().strength(-50))
-			.force("link", d3.forceLink(graph.links).distance(600))
-			.force("x", d3.forceX())
-			.force("y", d3.forceY())
-			.alphaTarget(1)
-			.on("tick", ticked);
+    var simulation = d3.forceSimulation(graph.nodes)
+        .force("charge", d3.forceManyBody().strength(() => -50))
+        .force("link", d3.forceLink(graph.links).distance(() => 600))
+        .force("x", d3.forceX())
+        .force("y", d3.forceY())
+        .alphaTarget(1)
+        .on("tick", ticked);
 
 	var g = svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")"),
 			link = g.append("g").attr("stroke", "#000").attr("stroke-width", .5).selectAll(".link"),
