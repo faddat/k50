@@ -1,4 +1,4 @@
-<script src="https://d3js.org/d3.v6.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
     // GRAPH GENERATION
     var graph = {};
@@ -26,11 +26,15 @@
     // Start with kn = 1
     generateCompleteGraph(5);
 
-    // VIEW
-    var svg = d3.select("svg"),
-        width = +svg.attr("width"),
-        height = +svg.attr("height"),
-        color = d3.scaleOrdinal(d3.schemeCategory10);
+        // Get the width and height of the window
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+
+        // Append an SVG element to the body
+        var svg = d3.select("body")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
 
     // Label
     var text = svg.append("text")
@@ -127,6 +131,14 @@
 		d.fx = null;
 		d.fy = null;
 	}
+
+	window.addEventListener("resize", function() {
+    // Update the SVG width and height
+    svg.attr("width", window.innerWidth)
+       .attr("height", window.innerHeight);
+
+    // You may also need to update other parts of your D3.js code that depend on the width and height
+});
 
 	// When text label is clicked, increment (kn -> k(n+1))
 	d3.select("text").on("click", incrementGraph);
