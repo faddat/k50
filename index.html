@@ -1,43 +1,42 @@
-<script src="https://d3js.org/d3.v7.min.js"></script>
-<script>
-    // GRAPH GENERATION
-    var graph = {};
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmos Hub Network State</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <script>
+        // GRAPH GENERATION
+        var graph = {};
 
-	function randomColor() {
-    return `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`;
-}
+        function randomColor() {
+            return `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`;
+        }
 
+        // In your restart function, replace the color function with randomColor
+        var node = null;
 
+        // Generates a complete graph kn
+        function generateCompleteGraph(n) {
+            // Number of vertices = n
+            graph.vCount = n;
 
+            // Number of edges (from Handshake Lemma)
+            graph.eCount = (1/2) * n * (n - 1);
 
-// In your restart function, replace the color function with randomColor
-node = node.enter().append("circle")
-    .attr("fill", randomColor)
-    .call(function(node) { node.transition().attr("r", 8); })
-    .merge(node);
+            // Generate vertices
+            graph.nodes = new Array(n).fill().map((_, i) => ({id: i}));
 
-    // Generates a complete graph kn
-    function generateCompleteGraph(n) {
-        // Number of vertices = n
-        graph.vCount = n;
-
-        // Number of edges (from Handshake Lemma)
-        graph.eCount = (1/2) * n * (n - 1);
-
-        // Generate vertices
-        graph.nodes = new Array(n).fill().map((_, i) => ({id: i}));
-
-        // Generate edges
-        graph.links = [];
-        for (var u = 0; u < n; u++) {
-            for (var v = u + 1; v < n; v++) {
-                graph.links.push({"target": u, "source": v});
+            // Generate edges
+            graph.links = [];
+            for (var u = 0; u < n; u++) {
+                for (var v = u + 1; v < n; v++) {
+                    graph.links.push({"target": u, "source": v});
+                }
             }
         }
-    }
-
-    // Start with kn = 1
-    generateCompleteGraph(5);
 
         // Get the width and height of the window
         var width = window.innerWidth;
@@ -49,119 +48,118 @@ node = node.enter().append("circle")
             .attr("width", width)
             .attr("height", height);
 
-    // Label
-    var text = svg.append("text")
-        .style("cursor", "pointer")
-        .attr("x", 50)
-        .attr("y", height-40)
-        .attr("font-family", "sans-serif")
-        .attr("font-size", "35px")
-        .text("Kn = " + graph.vCount)
+        // Label
+        var text = svg.append("text")
+            .style("cursor", "pointer")
+            .attr("x", 50)
+            .attr("y", height-40)
+            .attr("font-family", "sans-serif")
+            .attr("font-size", "35px")
+            .text("Kn = " + graph.vCount)
 
-    var simulation = d3.forceSimulation(graph.nodes)
-        .force("charge", d3.forceManyBody().strength(() => -50))
-        .force("link", d3.forceLink(graph.links).distance(() => 600))
-        .force("x", d3.forceX())
-        .force("y", d3.forceY())
-        .alphaTarget(1)
-        .on("tick", ticked);
+        var simulation = d3.forceSimulation(graph.nodes)
+            .force("charge", d3.forceManyBody().strength(() => -50))
+            .force("link", d3.forceLink(graph.links).distance(() => 600))
+            .force("x", d3.forceX())
+            .force("y", d3.forceY())
+            .alphaTarget(1)
+            .on("tick", ticked);
 
-	var g = svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")"),
-			link = g.append("g").attr("stroke", "#000").attr("stroke-width", .5).selectAll(".link"),
-			node = g.append("g").attr("stroke", "#fff").attr("stroke-width", .5).selectAll(".node");
+        var g = svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")"),
+            link = g.append("g").attr("stroke", "#000").attr("stroke-width", .5).selectAll(".link"),
+            node = g.append("g").attr("stroke", "#fff").attr("stroke-width", .5).selectAll(".node");
 
-	restart();
+        restart();
 
-	function restart() {
+        function restart() {
 
-		// Update text label
-		d3.select("text").text("Kn = " + graph.vCount);
+            // Update text label
+            d3.select("text").text("Kn = " + graph.vCount);
 
-		// Apply the general update pattern to the nodes.
-		node = node.data(graph.nodes, function(d) { return d.id;});
+            // Apply the general update pattern to the nodes.
+            node = node.data(graph.nodes, function(d) { return d.id; });
 
-		node.exit().transition()
-				.attr("r", 0)
-				.remove();
+            node.exit().transition()
+                    .attr("r", 0)
+                    .remove();
 
-		node = node.enter().append("circle")
-				.attr("fill", function(d) { return color(d.id); })
-				.call(function(node) { node.transition().attr("r", 8); })
-				.merge(node);
+            node = node.enter().append("circle")
+                    .attr("fill", function(d) { return randomColor(); })
+                    .call(function(node) { node.transition().attr("r", 8); })
+                    .merge(node);
 
-		// Apply the general update pattern to the links.
-		link = link.data(graph.links, function(d) { return d.source.id + "-" + d.target.id; });
+            // Apply the general update pattern to the links.
+            link = link.data(graph.links, function(d) { return d.source.id + "-" + d.target.id; });
 
-		// Keep the exiting links connected to the moving remaining nodes.
-		link.exit().transition()
-				.attr("stroke-opacity", 0)
-				.attrTween("x1", function(d) { return function() { return d.source.x; }; })
-				.attrTween("x2", function(d) { return function() { return d.target.x; }; })
-				.attrTween("y1", function(d) { return function() { return d.source.y; }; })
-				.attrTween("y2", function(d) { return function() { return d.target.y; }; })
-				.remove();
+            // Keep the exiting links connected to the moving remaining nodes.
+            link.exit().transition()
+                    .attr("stroke-opacity", 0)
+                    .attrTween("x1", function(d) { return function() { return d.source.x; }; })
+                    .attrTween("x2", function(d) { return function() { return d.target.x; }; })
+                    .attrTween("y1", function(d) { return function() { return d.source.y; }; })
+                    .attrTween("y2", function(d) { return function() { return d.target.y; }; })
+                    .remove();
 
-		link = link.enter().append("line")
-				.call(function(link) { link.transition().attr("stroke-opacity", .5); })
-				.merge(link);
+            link = link.enter().append("line")
+                    .call(function(link) { link.transition().attr("stroke-opacity", .5); })
+                    .merge(link);
 
-		// Make nodes draggable
-		d3.selectAll("circle")
-				.call(d3.drag()
-						.on("start", dragstarted)
-						.on("drag", dragged)
-						.on("end", dragended));
+            // Make nodes draggable
+            d3.selectAll("circle")
+                    .call(d3.drag()
+                            .on("start", dragstarted)
+                            .on("drag", dragged)
+                            .on("end", dragended));
 
-		// Update and restart the simulation.
-		simulation.nodes(graph.nodes);
-		simulation.force("link").links(graph.links);
-		simulation.alpha(1).restart();
-	}
+            // Update and restart the simulation.
+            simulation.nodes(graph.nodes);
+            simulation.force("link").links(graph.links);
+            simulation.alpha(1).restart();
+        }
 
-	function ticked() {
-		node.attr("cx", function(d) { return d.x; })
-				.attr("cy", function(d) { return d.y; })
+        function ticked() {
+            node.attr("cx", function(d) { return d.x; })
+                    .attr("cy", function(d) { return d.y; })
 
-		link.attr("x1", function(d) { return d.source.x; })
-				.attr("y1", function(d) { return d.source.y; })
-				.attr("x2", function(d) { return d.target.x; })
-				.attr("y2", function(d) { return d.target.y; });
-	}
+            link.attr("x1", function(d) { return d.source.x; })
+                    .attr("y1", function(d) { return d.source.y; })
+                    .attr("x2", function(d) { return d.target.x; })
+                    .attr("y2", function(d) { return d.target.y; });
+        }
 
-	function dragstarted(d) {
-		if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-		d.fx = d.x;
-		d.fy = d.y;
-	}
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
 
-	function dragged(d) {
-		d.fx = d3.event.x;
-		d.fy = d3.event.y;
-	}
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
 
-	function dragended(d) {
-		if (!d3.event.active) simulation.alphaTarget(0);
-		d.fx = null;
-		d.fy = null;
-	}
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
 
-	window.addEventListener("resize", function() {
-    // Update the SVG width and height
-    svg.attr("width", window.innerWidth)
-       .attr("height", window.innerHeight);
+        window.addEventListener("resize", function() {
+            // Update the SVG width and height
+            svg.attr("width", window.innerWidth)
+               .attr("height", window.innerHeight);
+        });
 
-});
+        // When text label is clicked, increment (kn -> k(n+1))
+        d3.select("text").on("click", incrementGraph);
+        function incrementGraph() {
 
-	// When text label is clicked, increment (kn -> k(n+1))
-	d3.select("text").on("click", incrementGraph);
-	function incrementGraph() {
+            // Generate new graph
+            generateCompleteGraph(graph.vCount+1);
 
-		// Generate new graph
-		generateCompleteGraph(graph.vCount+1);
-
-		// Update view
-		restart();
-
-	}
-
-</script>
+            // Update view
+            restart();
+        }
+    </script>
+</body>
+</html>
