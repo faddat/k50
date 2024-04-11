@@ -28,7 +28,7 @@
       top: 10px;
       left: 10px;
     }
-    #endpoint-input {
+    #api-key-input, #network-select {
       margin-bottom: 10px;
       padding: 5px;
       width: 300px;
@@ -54,7 +54,14 @@
 </head>
 <body>
   <div id="overlay">
-    <input type="text" id="endpoint-input" placeholder="Enter RPC Endpoint" />
+    <input type="text" id="api-key-input" placeholder="Enter NotionalAPI Key" />
+    <select id="network-select">
+      <option value="osmosis">Osmosis</option>
+      <option value="cosmoshub">Cosmos Hub</option>
+      <option value="akash">Akash</option>
+      <option value="evmos">Evmos</option>
+      <option value="quicksilver">Quicksilver</option>
+    </select>
     <button id="connect-button">Connect</button>
   </div>
   <div id="visualizer-container">
@@ -74,7 +81,8 @@
     const consensusCanvas = document.getElementById('consensus-canvas');
     const networkCanvas = document.getElementById('network-canvas');
     const blockInfo = document.getElementById('block-info');
-    const endpointInput = document.getElementById('endpoint-input');
+    const apiKeyInput = document.getElementById('api-key-input');
+    const networkSelect = document.getElementById('network-select');
     const connectButton = document.getElementById('connect-button');
 
     let wsClient;
@@ -85,14 +93,16 @@
     let networkLinks = [];
 
     function connect() {
-      const endpoint = endpointInput.value;
-      const wsEndpoint = `${endpoint}/websocket`;
+      const apiKey = apiKeyInput.value;
+      const nodeName = networkSelect.value;
+      const rpcEndpoint = `https://r-${nodeName}--${apiKey}.gw.notionalapi.net`;
+      const wsEndpoint = `wss://r-${nodeName}--${apiKey}.gw.notionalapi.net/websocket`;
+
       wsClient = new WebSocket(wsEndpoint);
 
       wsClient.onopen = () => {
         console.log('Connected to WebSocket');
         wsClient.send(JSON.stringify({ jsonrpc: '2.0', method: 'subscribe', params: ['newBlock'], id: 1 }));
-        wsClient.send(JSON.stringify({ jsonrpc: '2.0', method: 'net_info', id: 2 }));
       };
 
       wsClient.onmessage = (event) => {
@@ -101,7 +111,18 @@
           if (data.result.block) {
             blockHeight = data.result.block.header.height;
             blockSize = data.result.block.size;
-          } else if (data.result.peers) {
+          }
+        }
+      };
+
+      wsClient.onclose = () => {
+        console.log('WebSocket disconnected');
+      };
+
+      fetch(`${rpcEndpoint}/net_info`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.result) {
             networkNodes = data.result.peers.map(peer => ({
               id: peer.node_info.id,
               moniker: peer.node_info.moniker,
@@ -112,12 +133,10 @@
               target: peer.node_info.id
             }));
           }
-        }
-      };
-
-      wsClient.onclose = () => {
-        console.log('WebSocket disconnected');
-      };
+        })
+        .catch(error => {
+          console.error('Error fetching network info:', error);
+        });
     }
 
     function updateVisualizerState() {
