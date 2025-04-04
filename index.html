@@ -3,164 +3,301 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cosmos Hub Network State</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <title>K50 Testnet Mixer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 700px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.8em;
+            margin-bottom: 10px;
+            color: #ff6f61;
+            text-shadow: 0 0 10px rgba(255, 111, 97, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        p.subtitle {
+            text-align: center;
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            color: #d3d3d3;
+        }
+
+        .node-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .node-options {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .node-btn {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .node-btn::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 111, 97, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s ease, height 0.6s ease;
+        }
+
+        .node-btn:hover::after, .node-btn.active::after {
+            width: 200%;
+            height: 200%;
+        }
+
+        .node-btn:hover, .node-btn.active {
+            background: #ff6f61;
+            color: #0f2027;
+            transform: translateY(-5px);
+        }
+
+        .custom-node {
+            display: flex;
+            gap: 15px;
+        }
+
+        #customNodes {
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            width: 120px;
+            background: rgba(255, 255, 255, 0.8);
+            color: #0f2027;
+            transition: all 0.3s ease;
+        }
+
+        #customNodes:focus {
+            outline: none;
+            box-shadow: 0 0 10px rgba(255, 111, 97, 0.5);
+        }
+
+        .start-btn {
+            display: block;
+            width: 100%;
+            padding: 18px;
+            background: #00c4cc;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1.3em;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            animation: bounce 1.5s infinite;
+        }
+
+        .start-btn:hover {
+            background: #009ba1;
+            transform: scale(1.05);
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        #output {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            max-height: 300px;
+            overflow: hidden;
+            position: relative;
+            color: #fff;
+        }
+
+        .tattoo-canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <h1>K50 Mixer</h1>
+        <p class="subtitle">Craft your testnet and mix identities in style</p>
+        
+        <div class="node-selector">
+            <label>Select Number of Nodes:</label>
+            <div class="node-options">
+                <button class="node-btn" data-nodes="1">1 Node</button>
+                <button class="node-btn active" data-nodes="4">4 Nodes</button>
+                <button class="node-btn" data-nodes="69">69 Nodes</button>
+            </div>
+            <div class="custom-node">
+                <input type="number" id="customNodes" min="1" placeholder="Custom">
+                <button class="node-btn" id="customBtn">Set</button>
+            </div>
+        </div>
+
+        <button class="start-btn">Mix & Launch</button>
+        
+        <div id="output">
+            Status: Ready to mix...
+            <canvas class="tattoo-canvas" id="tattooCanvas"></canvas>
+        </div>
+    </div>
+
     <script>
-        // GRAPH GENERATION
-        var graph = {};
+        // Node selection logic
+        const nodeButtons = document.querySelectorAll('.node-btn');
+        let selectedNodes = 4;
 
-        function randomColor() {
-            return `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`;
-        }
-
-        // In your restart function, replace the color function with randomColor
-        var node = null;
-
-        // Generates a complete graph kn
-        function generateCompleteGraph(n) {
-            // Number of vertices = n
-            graph.vCount = n;
-
-            // Number of edges (from Handshake Lemma)
-            graph.eCount = (1/2) * n * (n - 1);
-
-            // Generate vertices
-            graph.nodes = new Array(n).fill().map((_, i) => ({id: i}));
-
-            // Generate edges
-            graph.links = [];
-            for (var u = 0; u < n; u++) {
-                for (var v = u + 1; v < n; v++) {
-                    graph.links.push({"target": u, "source": v});
+        nodeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                nodeButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                if (btn.id !== 'customBtn') {
+                    selectedNodes = parseInt(btn.dataset.nodes);
+                    updateOutput(`Mixing ${selectedNodes} nodes...`);
                 }
-            }
-        }
-
-        // Get the width and height of the window
-        var width = window.innerWidth;
-        var height = window.innerHeight;
-
-        // Append an SVG element to the body
-        var svg = d3.select("body")
-            .append("svg")
-            .attr("width", width)
-            .attr("height", height);
-
-        // Label
-        var text = svg.append("text")
-            .style("cursor", "pointer")
-            .attr("x", 50)
-            .attr("y", height-40)
-            .attr("font-family", "sans-serif")
-            .attr("font-size", "35px")
-            .text("Kn = " + graph.vCount)
-
-        var simulation = d3.forceSimulation(graph.nodes)
-            .force("charge", d3.forceManyBody().strength(() => -50))
-            .force("link", d3.forceLink(graph.links).distance(() => 600))
-            .force("x", d3.forceX())
-            .force("y", d3.forceY())
-            .alphaTarget(1)
-            .on("tick", ticked);
-
-        var g = svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")"),
-            link = g.append("g").attr("stroke", "#000").attr("stroke-width", .5).selectAll(".link"),
-            node = g.append("g").attr("stroke", "#fff").attr("stroke-width", .5).selectAll(".node");
-
-		// Generate initial graph
-		generateCompleteGraph(69);
-        restart();
-
-        function restart() {
-
-            // Update text label
-            d3.select("text").text("Kn = " + graph.vCount);
-
-            // Apply the general update pattern to the nodes.
-            node = node.data(graph.nodes, function(d) { return d.id; });
-
-            node.exit().transition()
-                    .attr("r", 0)
-                    .remove();
-
-            node = node.enter().append("circle")
-                    .attr("fill", function(d) { return randomColor(); })
-                    .call(function(node) { node.transition().attr("r", 8); })
-                    .merge(node);
-
-            // Apply the general update pattern to the links.
-            link = link.data(graph.links, function(d) { return d.source.id + "-" + d.target.id; });
-
-            // Keep the exiting links connected to the moving remaining nodes.
-            link.exit().transition()
-                    .attr("stroke-opacity", 0)
-                    .attrTween("x1", function(d) { return function() { return d.source.x; }; })
-                    .attrTween("x2", function(d) { return function() { return d.target.x; }; })
-                    .attrTween("y1", function(d) { return function() { return d.source.y; }; })
-                    .attrTween("y2", function(d) { return function() { return d.target.y; }; })
-                    .remove();
-
-            link = link.enter().append("line")
-                    .call(function(link) { link.transition().attr("stroke-opacity", .5); })
-                    .merge(link);
-
-            // Make nodes draggable
-            d3.selectAll("circle")
-                    .call(d3.drag()
-                            .on("start", dragstarted)
-                            .on("drag", dragged)
-                            .on("end", dragended));
-
-            // Update and restart the simulation.
-            simulation.nodes(graph.nodes);
-            simulation.force("link").links(graph.links);
-            simulation.alpha(1).restart();
-        }
-
-        function ticked() {
-            node.attr("cx", function(d) { return d.x; })
-                    .attr("cy", function(d) { return d.y; })
-
-            link.attr("x1", function(d) { return d.source.x; })
-                    .attr("y1", function(d) { return d.source.y; })
-                    .attr("x2", function(d) { return d.target.x; })
-                    .attr("y2", function(d) { return d.target.y; });
-        }
-
-        function dragstarted(d) {
-            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-        }
-
-        function dragged(d) {
-            d.fx = d3.event.x;
-            d.fy = d3.event.y;
-        }
-
-        function dragended(d) {
-            if (!d3.event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-        }
-
-        window.addEventListener("resize", function() {
-            // Update the SVG width and height
-            svg.attr("width", window.innerWidth)
-               .attr("height", window.innerHeight);
+            });
         });
 
-        // When text label is clicked, increment (kn -> k(n+1))
-        d3.select("text").on("click", incrementGraph);
-        function incrementGraph() {
+        document.getElementById('customBtn').addEventListener('click', () => {
+            const customInput = document.getElementById('customNodes').value;
+            if (customInput && customInput > 0) {
+                selectedNodes = parseInt(customInput);
+                nodeButtons.forEach(b => b.classList.remove('active'));
+                document.getElementById('customBtn').classList.add('active');
+                updateOutput(`Mixing ${selectedNodes} nodes...`);
+            } else {
+                updateOutput('Enter a valid number of nodes, friend!');
+            }
+        });
 
-            // Generate new graph
-            generateCompleteGraph(graph.vCount+1);
+        document.querySelector('.start-btn').addEventListener('click', () => {
+            updateOutput(`Launching testnet with ${selectedNodes} nodes...`);
+            drawTattoo(selectedNodes);
+            // Integrate with k50.sh here (e.g., fetch or WebSocket)
+        });
 
-            // Update view
-            restart();
+        function updateOutput(message) {
+            document.getElementById('output').innerText = message;
+        }
+
+        // Tattoo-inspired identity mixer animation
+        const canvas = document.getElementById('tattooCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 660; // Adjusted to fit output area
+        canvas.height = 260;
+
+        function drawTattoo(nodeCount) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const people = [];
+            for (let i = 0; i < nodeCount; i++) {
+                people.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    color: `hsl(${Math.random() * 360}, 70%, 50%)`
+                });
+            }
+
+            function animate() {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                people.forEach(person => {
+                    person.x += person.vx;
+                    person.y += person.vy;
+
+                    if (person.x < 0 || person.x > canvas.width) person.vx *= -1;
+                    if (person.y < 0 || person.y > canvas.height) person.vy *= -1;
+
+                    ctx.beginPath();
+                    ctx.arc(person.x, person.y, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = person.color;
+                    ctx.fill();
+
+                    people.forEach(other => {
+                        if (person !== other) {
+                            const dx = person.x - other.x;
+                            const dy = person.y - other.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist < 50) {
+                                ctx.beginPath();
+                                ctx.moveTo(person.x, person.y);
+                                ctx.lineTo(other.x, other.y);
+                                ctx.strokeStyle = `rgba(255, 255, 255, ${1 - dist / 50})`;
+                                ctx.stroke();
+                            }
+                        }
+                    });
+                });
+
+                requestAnimationFrame(animate);
+            }
+            animate();
         }
     </script>
 </body>
