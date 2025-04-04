@@ -3,32 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cosmos Hub Network Tattoo</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <title>Cosmos Hub Tattoo</title>
     <style>
         body {
             margin: 0;
-            background: radial-gradient(circle at center, #1a0b2e, #0d041a);
+            background: #0d041a;
             overflow: hidden;
         }
-        svg {
+        canvas {
             width: 100vw;
             height: 100vh;
-        }
-        .node {
-            transition: all 0.3s ease;
-        }
-        .link {
-            stroke-opacity: 0.3;
-            transition: stroke-opacity 0.5s ease;
-        }
-        .label {
-            fill: #ffd700;
-            font-family: 'Orbitron', sans-serif;
-            font-size: 35px;
-            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
-            cursor: pointer;
-            user-select: none;
         }
         .controls {
             position: absolute;
@@ -36,6 +20,7 @@
             left: 20px;
             font-family: 'Orbitron', sans-serif;
             color: #fff;
+            z-index: 10;
         }
         .controls button {
             padding: 10px 15px;
@@ -49,7 +34,18 @@
         }
         .controls button:hover, .controls button.active {
             background: #ffd700;
-            color: #1a0b2e;
+            color: #0d041a;
+        }
+        .label {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 35px;
+            color: #ffd700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            cursor: pointer;
+            z-index: 10;
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
@@ -60,169 +56,205 @@
         <button class="node-btn active" data-nodes="4">4</button>
         <button class="node-btn" data-nodes="69">69</button>
     </div>
+    <div class="label" id="label">Kn = 4</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script>
-        // Graph data
-        let graph = {};
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(
+            window.innerWidth / -2, window.innerWidth / 2,
+            window.innerHeight / 2, window.innerHeight / -2,
+            1, 1000
+        );
+        camera.position.z = 500;
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-        // Generate a complete graph Kn
+        // Graph data
+        let graph = { nodes: [], edges: [] };
+        let nodeSprites = [];
+        let edgeLines = [];
+
+        // Generate complete graph Kn
         function generateCompleteGraph(n) {
-            graph.vCount = n;
-            graph.eCount = (n * (n - 1)) / 2;
             graph.nodes = Array.from({ length: n }, (_, i) => ({
                 id: i,
+                x: (Math.random() - 0.5) * 800,
+                y: (Math.random() - 0.5) * 600,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
                 color: `hsl(${Math.random() * 360}, 80%, 70%)`
             }));
-            graph.links = [];
+            graph.edges = [];
             for (let u = 0; u < n; u++) {
                 for (let v = u + 1; v < n; v++) {
-                    graph.links.push({ source: u, target: v });
+                    graph.edges.push({ source: u, target: v });
                 }
             }
+            document.getElementById("label").textContent = `Kn = ${n}`;
         }
 
-        // SVG setup
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        const svg = d3.select("body")
-            .append("svg")
-            .attr("width", width)
-            .attr("height", height);
+        // Create node sprite (glowing dot)
+        function createNodeSprite(color) {
+            const canvas = document.createElement("canvas");
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext("2d");
+            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(0.5, `${color}80`);
+            gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(32, 32, 30, 0, Math.PI * 2);
+            ctx.fill();
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            const material = new THREE.SpriteMaterial({ map: texture });
+            return new THREE.Sprite(material);
+        }
 
-        // Gradient definitions for edges
-        const defs = svg.append("defs");
-        defs.append("linearGradient")
-            .attr("id", "link-gradient")
-            .attr("gradientUnits", "userSpaceOnUse")
-            .html(`
-                <stop offset="0%" stop-color="#ff6f61" stop-opacity="0.5"/>
-                <stop offset="50%" stop-color="#ffd700" stop-opacity="0.8"/>
-                <stop offset="100%" stop-color="#00c4cc" stop-opacity="0.5"/>
-            `);
+        // Render graph
+        function renderGraph() {
+            // Clear previous objects
+            nodeSprites.forEach(sprite => scene.remove(sprite));
+            edgeLines.forEach(line => scene.remove(line));
+            nodeSprites = [];
+            edgeLines = [];
 
-        // Groups for links and nodes
-        const g = svg.append("g").attr("transform", `translate(${width / 2}, ${height / 2})`);
-        let link = g.append("g").attr("class", "links").selectAll(".link");
-        let node = g.append("g").attr("class", "nodes").selectAll(".node");
-
-        // Label
-        const label = svg.append("text")
-            .attr("class", "label")
-            .attr("x", 50)
-            .attr("y", height - 40)
-            .text(`Kn = ${graph.vCount}`)
-            .on("click", () => {
-                generateCompleteGraph(graph.vCount + 1);
-                restart();
+            // Add nodes
+            graph.nodes.forEach(node => {
+                const sprite = createNodeSprite(node.color);
+                sprite.position.set(node.x, node.y, 0);
+                sprite.scale.set(20, 20, 1);
+                nodeSprites.push(sprite);
+                scene.add(sprite);
             });
 
-        // Force simulation
-        const simulation = d3.forceSimulation()
-            .force("charge", d3.forceManyBody().strength(-100))
-            .force("link", d3.forceLink().distance(100).strength(0.1))
-            .force("center", d3.forceCenter())
-            .force("collision", d3.forceCollide(20))
-            .alphaTarget(0.1)
-            .on("tick", ticked);
-
-        // Initial graph
-        generateCompleteGraph(4); // Start with 4 nodes
-        restart();
-
-        function restart() {
-            label.text(`Kn = ${graph.vCount}`);
-
-            // Update nodes
-            node = node.data(graph.nodes, d => d.id);
-            node.exit().transition().duration(500)
-                .attr("r", 0)
-                .remove();
-            node = node.enter().append("circle")
-                .attr("class", "node")
-                .attr("r", 0)
-                .attr("fill", d => d.color)
-                .attr("stroke", "#fff")
-                .attr("stroke-width", 1)
-                .call(node => node.transition().duration(500).attr("r", 8))
-                .merge(node)
-                .call(d3.drag()
-                    .on("start", dragstarted)
-                    .on("drag", dragged)
-                    .on("end", dragended));
-
-            // Update links
-            link = link.data(graph.links, d => `${d.source.id}-${d.target.id}`);
-            link.exit().transition().duration(500)
-                .attr("stroke-opacity", 0)
-                .remove();
-            link = link.enter().append("line")
-                .attr("class", "link")
-                .attr("stroke", "url(#link-gradient)")
-                .attr("stroke-width", 1)
-                .attr("stroke-opacity", 0)
-                .call(link => link.transition().duration(500).attr("stroke-opacity", 0.3))
-                .merge(link);
-
-            // Restart simulation
-            simulation.nodes(graph.nodes);
-            simulation.force("link").links(graph.links);
-            simulation.alpha(1).restart();
-
-            // Animate node glow
-            node.each(function(d) {
-                d3.select(this)
-                    .transition()
-                    .duration(2000)
-                    .ease(d3.easeSinInOut)
-                    .attr("r", 12)
-                    .style("filter", "drop-shadow(0 0 5px currentColor)")
-                    .transition()
-                    .duration(2000)
-                    .attr("r", 8)
-                    .style("filter", "none")
-                    .on("end", function() { d3.select(this).transition().call(arguments.callee); });
+            // Add edges
+            const material = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                opacity: 0.3,
+                transparent: true
+            });
+            graph.edges.forEach(edge => {
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array([
+                    graph.nodes[edge.source].x, graph.nodes[edge.source].y, 0,
+                    graph.nodes[edge.target].x, graph.nodes[edge.target].y, 0
+                ]);
+                const colors = new Float32Array([
+                    ...THREE.Color(graph.nodes[edge.source].color).toArray(),
+                    ...THREE.Color(graph.nodes[edge.target].color).toArray()
+                ]);
+                geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+                const line = new THREE.Line(geometry, material);
+                edgeLines.push(line);
+                scene.add(line);
             });
         }
 
-        function ticked() {
-            node.attr("cx", d => d.x).attr("cy", d => d.y);
-            link.attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
+        // Simple force simulation (in lieu of D3)
+        function simulate() {
+            const charge = -100;
+            const linkDistance = 100;
+            graph.nodes.forEach(node => {
+                let fx = 0, fy = 0;
+                // Repulsion (charge)
+                graph.nodes.forEach(other => {
+                    if (node !== other) {
+                        const dx = node.x - other.x;
+                        const dy = node.y - other.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+                        const force = charge / (dist * dist);
+                        fx += force * dx / dist;
+                        fy += force * dy / dist;
+                    }
+                });
+                // Attraction (links)
+                graph.edges.forEach(edge => {
+                    const source = graph.nodes[edge.source];
+                    const target = graph.nodes[edge.target];
+                    if (source === node || target === node) {
+                        const other = source === node ? target : source;
+                        const dx = other.x - node.x;
+                        const dy = other.y - node.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+                        const force = (dist - linkDistance) * 0.01;
+                        fx += force * dx / dist;
+                        fy += force * dy / dist;
+                    }
+                });
+                node.vx += fx * 0.1;
+                node.vy += fy * 0.1;
+                node.vx *= 0.95; // Damping
+                node.vy *= 0.95;
+                node.x += node.vx;
+                node.y += node.vy;
+            });
+
+            // Update positions
+            nodeSprites.forEach((sprite, i) => {
+                sprite.position.set(graph.nodes[i].x, graph.nodes[i].y, 0);
+            });
+            edgeLines.forEach((line, i) => {
+                const pos = line.geometry.attributes.position.array;
+                pos[0] = graph.nodes[graph.edges[i].source].x;
+                pos[1] = graph.nodes[graph.edges[i].source].y;
+                pos[3] = graph.nodes[graph.edges[i].target].x;
+                pos[4] = graph.nodes[graph.edges[i].target].y;
+                line.geometry.attributes.position.needsUpdate = true;
+            });
         }
 
-        function dragstarted(d) {
-            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            simulate();
+            renderer.render(scene, camera);
         }
 
-        function dragged(d) {
-            d.fx = d3.event.x;
-            d.fy = d3.event.y;
-        }
+        // Initial setup
+        generateCompleteGraph(4);
+        renderGraph();
+        animate();
 
-        function dragended(d) {
-            if (!d3.event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-        }
+        // Node controls
+        document.querySelectorAll(".node-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const n = parseInt(btn.dataset.nodes);
+                document.querySelectorAll(".node-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                generateCompleteGraph(n);
+                renderGraph();
+            });
+        });
 
-        // Node count controls
-        d3.selectAll(".node-btn").on("click", function() {
-            const n = parseInt(this.dataset.nodes);
-            d3.selectAll(".node-btn").classed("active", false);
-            d3.select(this).classed("active", true);
-            generateCompleteGraph(n);
-            restart();
+        document.getElementById("label").addEventListener("click", () => {
+            generateCompleteGraph(graph.nodes.length + 1);
+            renderGraph();
         });
 
         // Resize handling
         window.addEventListener("resize", () => {
-            svg.attr("width", window.innerWidth)
-               .attr("height", window.innerHeight);
-            simulation.force("center", d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2));
-            simulation.alpha(1).restart();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.left = window.innerWidth / -2;
+            camera.right = window.innerWidth / 2;
+            camera.top = window.innerHeight / 2;
+            camera.bottom = window.innerHeight / -2;
+            camera.updateProjectionMatrix();
+        });
+
+        // Export as image (for tattoo)
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "s") {
+                const link = document.createElement("a");
+                link.href = renderer.domElement.toDataURL("image/png");
+                link.download = "cosmos_hub_tattoo.png";
+                link.click();
+            }
         });
     </script>
 </body>
