@@ -159,66 +159,86 @@
                 
                 // Create nodes
                 this.masterGain = context.createGain();
-                this.masterGain.gain.value = 0.5;
+                this.masterGain.gain.value = 0.3; // Reduced overall volume
                 this.masterGain.connect(this.analyser);
                 this.analyser.connect(context.destination);
                 
-                // Create oscillators
+                // Create compressor for better sound
+                this.compressor = context.createDynamicsCompressor();
+                this.compressor.threshold.value = -24;
+                this.compressor.knee.value = 30;
+                this.compressor.ratio.value = 12;
+                this.compressor.attack.value = 0.003;
+                this.compressor.release.value = 0.25;
+                this.masterGain.connect(this.compressor);
+                this.compressor.connect(this.analyser);
+                
+                // Create oscillators with more musical frequencies
                 this.bassOsc = context.createOscillator();
-                this.bassOsc.type = 'sine';
+                this.bassOsc.type = 'triangle'; // Changed to triangle for softer bass
                 this.bassOsc.frequency.value = 55; // A1
                 
                 this.midOsc = context.createOscillator();
-                this.midOsc.type = 'square';
+                this.midOsc.type = 'sine'; // Changed to sine for smoother sound
                 this.midOsc.frequency.value = 110; // A2
                 
                 this.highOsc = context.createOscillator();
-                this.highOsc.type = 'sawtooth';
+                this.highOsc.type = 'sine'; // Changed to sine
                 this.highOsc.frequency.value = 220; // A3
                 
-                // Create filters
+                // Individual gain nodes for better mixing
+                this.bassGain = context.createGain();
+                this.bassGain.gain.value = 0.4;
+                
+                this.midGain = context.createGain();
+                this.midGain.gain.value = 0.2;
+                
+                this.highGain = context.createGain();
+                this.highGain.gain.value = 0.1;
+                
+                // Create filters with gentler settings
                 this.bassFilter = context.createBiquadFilter();
                 this.bassFilter.type = 'lowpass';
-                this.bassFilter.frequency.value = 200;
+                this.bassFilter.frequency.value = 150;
+                this.bassFilter.Q.value = 1;
                 
                 this.midFilter = context.createBiquadFilter();
                 this.midFilter.type = 'bandpass';
-                this.midFilter.frequency.value = 1000;
+                this.midFilter.frequency.value = 800;
+                this.midFilter.Q.value = 0.5;
                 
                 this.highFilter = context.createBiquadFilter();
                 this.highFilter.type = 'highpass';
-                this.highFilter.frequency.value = 2000;
+                this.highFilter.frequency.value = 1500;
+                this.highFilter.Q.value = 0.5;
                 
-                // Create LFOs
+                // Create LFOs with gentler modulation
                 this.bassLFO = context.createOscillator();
-                this.bassLFO.frequency.value = 0.1;
+                this.bassLFO.frequency.value = 0.2;
                 this.bassLFOGain = context.createGain();
-                this.bassLFOGain.gain.value = 20;
+                this.bassLFOGain.gain.value = 10;
                 
                 this.midLFO = context.createOscillator();
-                this.midLFO.frequency.value = 0.2;
+                this.midLFO.frequency.value = 0.1;
                 this.midLFOGain = context.createGain();
-                this.midLFOGain.gain.value = 30;
+                this.midLFOGain.gain.value = 15;
                 
                 this.highLFO = context.createOscillator();
-                this.highLFO.frequency.value = 0.3;
+                this.highLFO.frequency.value = 0.15;
                 this.highLFOGain = context.createGain();
-                this.highLFOGain.gain.value = 40;
+                this.highLFOGain.gain.value = 20;
                 
                 // Connect everything
-                this.bassLFO.connect(this.bassLFOGain);
-                this.bassLFOGain.connect(this.bassOsc.frequency);
-                this.bassOsc.connect(this.bassFilter);
+                this.bassOsc.connect(this.bassGain);
+                this.bassGain.connect(this.bassFilter);
                 this.bassFilter.connect(this.masterGain);
                 
-                this.midLFO.connect(this.midLFOGain);
-                this.midLFOGain.connect(this.midOsc.frequency);
-                this.midOsc.connect(this.midFilter);
+                this.midOsc.connect(this.midGain);
+                this.midGain.connect(this.midFilter);
                 this.midFilter.connect(this.masterGain);
                 
-                this.highLFO.connect(this.highLFOGain);
-                this.highLFOGain.connect(this.highOsc.frequency);
-                this.highOsc.connect(this.highFilter);
+                this.highOsc.connect(this.highGain);
+                this.highGain.connect(this.highFilter);
                 this.highFilter.connect(this.masterGain);
                 
                 // Start oscillators
@@ -228,26 +248,40 @@
                 this.bassLFO.start();
                 this.midLFO.start();
                 this.highLFO.start();
+
+                // Create rhythm
+                this.rhythmInterval = 200; // 120 BPM
+                this.lastRhythmTime = 0;
             }
             
             update(seed) {
-                // Use seed (369) to generate variations
-                const bassFreq = 55 + (seed % 10);
-                const midFreq = 110 + (seed % 20);
-                const highFreq = 220 + (seed % 30);
+                const now = this.context.currentTime;
                 
-                this.bassOsc.frequency.setValueAtTime(bassFreq, this.context.currentTime);
-                this.midOsc.frequency.setValueAtTime(midFreq, this.context.currentTime);
-                this.highOsc.frequency.setValueAtTime(highFreq, this.context.currentTime);
+                // Create a rhythm pattern
+                if (now - this.lastRhythmTime >= this.rhythmInterval / 1000) {
+                    this.lastRhythmTime = now;
+                    this.bassGain.gain.setValueAtTime(0.4, now);
+                    this.bassGain.gain.exponentialRampToValueAtTime(0.1, now + 0.1);
+                }
+
+                // Use seed for subtle variations
+                const bassFreq = 55 + (seed % 5);
+                const midFreq = 110 + (seed % 10);
+                const highFreq = 220 + (seed % 15);
                 
-                // Modulate filters
-                const bassMod = Math.sin(this.context.currentTime * 0.1) * 50 + 200;
-                const midMod = Math.sin(this.context.currentTime * 0.2) * 200 + 1000;
-                const highMod = Math.sin(this.context.currentTime * 0.3) * 500 + 2000;
+                // Smoother frequency changes
+                this.bassOsc.frequency.setTargetAtTime(bassFreq, now, 0.1);
+                this.midOsc.frequency.setTargetAtTime(midFreq, now, 0.1);
+                this.highOsc.frequency.setTargetAtTime(highFreq, now, 0.1);
                 
-                this.bassFilter.frequency.setValueAtTime(bassMod, this.context.currentTime);
-                this.midFilter.frequency.setValueAtTime(midMod, this.context.currentTime);
-                this.highFilter.frequency.setValueAtTime(highMod, this.context.currentTime);
+                // Gentler filter modulation
+                const bassMod = Math.sin(now * 0.2) * 30 + 150;
+                const midMod = Math.sin(now * 0.1) * 100 + 800;
+                const highMod = Math.sin(now * 0.15) * 200 + 1500;
+                
+                this.bassFilter.frequency.setTargetAtTime(bassMod, now, 0.1);
+                this.midFilter.frequency.setTargetAtTime(midMod, now, 0.1);
+                this.highFilter.frequency.setTargetAtTime(highMod, now, 0.1);
             }
             
             getAnalyser() {
@@ -337,22 +371,23 @@
             function createNodeSprite(color) {
                 try {
                     const canvas = document.createElement('canvas');
-                    canvas.width = 128;
-                    canvas.height = 128;
+                    canvas.width = 256; // Increased canvas size
+                    canvas.height = 256;
                     const ctx = canvas.getContext('2d');
                     
                     if (!ctx) {
                         throw new Error('Failed to get 2D context');
                     }
 
-                    // Create larger, more visible nodes
-                    const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+                    // Create larger, more visible nodes with softer glow
+                    const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
                     gradient.addColorStop(0, color);
-                    gradient.addColorStop(0.3, color);
+                    gradient.addColorStop(0.2, color);
+                    gradient.addColorStop(0.4, color.replace(')', ', 0.5)'));
                     gradient.addColorStop(1, 'rgba(0,0,0,0)');
                     
                     ctx.fillStyle = gradient;
-                    ctx.fillRect(0, 0, 128, 128);
+                    ctx.fillRect(0, 0, 256, 256);
                     
                     const texture = new THREE.Texture(canvas);
                     texture.needsUpdate = true;
@@ -360,7 +395,8 @@
                     const material = new THREE.SpriteMaterial({
                         map: texture,
                         transparent: true,
-                        blending: THREE.AdditiveBlending
+                        blending: THREE.AdditiveBlending,
+                        depthTest: false
                     });
                     
                     return new THREE.Sprite(material);
@@ -452,10 +488,10 @@
             function simulate() {
                 const viewport = getViewportSize();
                 const bounds = Math.min(viewport.width, viewport.height) * 0.4;
-                const charge = -1000;
-                const centerForce = 0.02;
-                const damping = 0.95;
-
+                const charge = -800; // Reduced repulsion
+                const centerForce = 0.015; // Reduced center force
+                const damping = 0.98; // Increased damping for smoother movement
+                
                 // Get audio data if music is playing
                 let bassLevel = 0;
                 let midLevel = 0;
@@ -464,80 +500,79 @@
                 if (analyser && musicPlaying) {
                     analyser.getByteFrequencyData(audioData);
                     
-                    // Split frequency data into ranges
-                    bassLevel = average(audioData.slice(0, 4)) / 255;  // Low frequencies
-                    midLevel = average(audioData.slice(4, 12)) / 255;  // Mid frequencies
-                    trebleLevel = average(audioData.slice(12, 24)) / 255;  // High frequencies
+                    bassLevel = average(audioData.slice(0, 4)) / 255;
+                    midLevel = average(audioData.slice(4, 12)) / 255;
+                    trebleLevel = average(audioData.slice(12, 24)) / 255;
                     
-                    // Update synth with seed
-                    synth.update(369);
+                    if (synth) synth.update(369);
                 }
 
                 function average(array) {
                     return array.reduce((a, b) => a + b, 0) / array.length;
                 }
 
-                // Apply audio-reactive forces
+                // Apply forces with smoother transitions
                 graph.nodes.forEach((node, i) => {
                     let fx = 0, fy = 0;
 
-                    // Base repulsion
+                    // Smoother repulsion
                     graph.nodes.forEach(other => {
                         if (node !== other) {
                             const dx = node.x - other.x;
                             const dy = node.y - other.y;
                             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                            const force = charge / (dist * dist);
+                            const force = charge / (dist * dist + 100); // Added offset to prevent extreme forces
                             fx += force * dx / dist;
                             fy += force * dy / dist;
                         }
                     });
 
-                    // Audio-reactive forces
+                    // Audio-reactive forces with smoother transitions
                     if (musicPlaying) {
-                        // Bass affects node position
                         const angle = (i * 2 * Math.PI / graph.nodes.length);
-                        const bassForce = bassLevel * 50;
+                        const bassForce = bassLevel * 30; // Reduced force
                         fx += Math.cos(angle) * bassForce;
                         fy += Math.sin(angle) * bassForce;
 
-                        // Mid frequencies affect node size
-                        const scale = 100 * (1 + midLevel);
-                        nodeSprites[i].scale.set(scale, scale, 1);
+                        // Smoother size transitions
+                        const targetScale = 80 * (1 + midLevel * 0.5); // Reduced scale range
+                        const currentScale = nodeSprites[i].scale.x;
+                        const newScale = currentScale + (targetScale - currentScale) * 0.1;
+                        nodeSprites[i].scale.set(newScale, newScale, 1);
 
-                        // Treble affects node color intensity
+                        // Smoother color transitions
                         const hue = (i * 360 / graph.nodes.length) % 360;
-                        const brightness = 70 + trebleLevel * 30;
+                        const brightness = 60 + trebleLevel * 20; // Reduced brightness range
                         node.color = `hsl(${hue}, 100%, ${brightness}%)`;
-                        nodeSprites[i].material.color = new THREE.Color(node.color);
+                        nodeSprites[i].material.color.setHSL(hue/360, 1, brightness/100);
                     }
 
-                    // Center attraction with audio-reactive strength
-                    const centerStrength = centerForce * (1 + (bassLevel + midLevel) * 0.5);
+                    // Smoother center attraction
+                    const centerStrength = centerForce * (1 + (bassLevel + midLevel) * 0.3);
                     fx += -node.x * centerStrength;
                     fy += -node.y * centerStrength;
 
-                    // Update velocity and position
-                    node.vx = (node.vx + fx) * damping;
-                    node.vy = (node.vy + fy) * damping;
+                    // Update velocity and position with smoother transitions
+                    node.vx = (node.vx + fx * 0.1) * damping;
+                    node.vy = (node.vy + fy * 0.1) * damping;
                     node.x += node.vx;
                     node.y += node.vy;
 
-                    // Boundary containment
+                    // Smoother boundary containment
                     if (Math.abs(node.x) > bounds) {
                         node.x = Math.sign(node.x) * bounds;
-                        node.vx *= -0.5;
+                        node.vx *= -0.3; // Gentler bounce
                     }
                     if (Math.abs(node.y) > bounds) {
                         node.y = Math.sign(node.y) * bounds;
-                        node.vy *= -0.5;
+                        node.vy *= -0.3; // Gentler bounce
                     }
 
                     // Update node position
                     nodeSprites[i].position.set(node.x, node.y, 0);
                 });
 
-                // Update edge positions
+                // Update edge positions with smoother transitions
                 edgeLines.forEach((line, i) => {
                     const positions = line.geometry.attributes.position.array;
                     positions[0] = graph.nodes[graph.edges[i].source].x;
