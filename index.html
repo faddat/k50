@@ -632,6 +632,39 @@
             animate();
             log('Initialization complete');
 
+            // Start music automatically
+            document.addEventListener('DOMContentLoaded', async () => {
+                try {
+                    // Most browsers require user interaction before playing audio
+                    // We'll show a message to help with this
+                    const message = document.createElement('div');
+                    message.style.position = 'fixed';
+                    message.style.top = '50%';
+                    message.style.left = '50%';
+                    message.style.transform = 'translate(-50%, -50%)';
+                    message.style.background = 'rgba(0,0,0,0.8)';
+                    message.style.color = '#ffd700';
+                    message.style.padding = '20px';
+                    message.style.borderRadius = '10px';
+                    message.style.fontFamily = 'Orbitron, sans-serif';
+                    message.style.cursor = 'pointer';
+                    message.style.zIndex = '1000';
+                    message.innerHTML = 'Click anywhere to start the experience';
+                    document.body.appendChild(message);
+
+                    // Start music on first click
+                    const startAudio = async () => {
+                        await toggleMusic();
+                        message.remove();
+                        document.removeEventListener('click', startAudio);
+                    };
+
+                    document.addEventListener('click', startAudio, { once: true });
+                } catch (error) {
+                    log('Error auto-starting music: ' + error.message);
+                }
+            });
+
         } catch (error) {
             log('Critical error: ' + error.message);
             console.error('Critical error:', error);
