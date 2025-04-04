@@ -91,6 +91,9 @@
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+    <!-- Load Stats.js first -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 </head>
 <body>
     <div class="controls">
@@ -105,8 +108,6 @@
     <div class="label" id="label">Kn = 369</div>
     <div id="debug"></div>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js"></script>
     <script>
         // Debug helper
         const debug = document.getElementById('debug');
@@ -122,6 +123,25 @@
             debug.style.display = debug.style.display === 'none' ? 'block' : 'none';
         }
 
+        // Stats setup with error handling
+        let stats = null;
+        try {
+            if (typeof Stats === 'function') {
+                stats = new Stats();
+                stats.showPanel(0);
+                document.body.appendChild(stats.dom);
+                stats.dom.style.position = 'fixed';
+                stats.dom.style.top = '10px';
+                stats.dom.style.left = '10px';
+                stats.dom.style.zIndex = '1000';
+                log('Stats initialized successfully');
+            } else {
+                log('Warning: Stats.js not loaded properly');
+            }
+        } catch (error) {
+            log('Error initializing Stats: ' + error.message);
+        }
+
         // Music setup
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         let musicPlaying = false;
@@ -129,68 +149,130 @@
         let analyser = null;
         let audioData = null;
 
-        // Audio analysis setup
-        function setupAudioAnalysis() {
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = 256;
-            audioData = new Uint8Array(analyser.frequencyBinCount);
-            return analyser;
-        }
-
-        // Get random techno MIDI from repository
-        async function getRandomMidiUrl() {
-            try {
-                const response = await fetch('https://api.github.com/repos/publicsamples/Techno-MIDI/contents/');
-                const files = await response.json();
-                const midiFiles = files.filter(file => file.name.toLowerCase().endsWith('.mid'));
-                const randomMidi = midiFiles[Math.floor(Math.random() * midiFiles.length)];
-                return randomMidi.download_url;
-            } catch (error) {
-                log('Error fetching MIDI list: ' + error.message);
-                // Fallback to a default MIDI if GitHub API fails
-                return 'https://bitmidi.com/uploads/90939.mid';
+        // Generative techno synthesizer
+        class TechnoSynth {
+            constructor(context) {
+                this.context = context;
+                this.analyser = context.createAnalyser();
+                this.analyser.fftSize = 256;
+                this.audioData = new Uint8Array(this.analyser.frequencyBinCount);
+                
+                // Create nodes
+                this.masterGain = context.createGain();
+                this.masterGain.gain.value = 0.5;
+                this.masterGain.connect(this.analyser);
+                this.analyser.connect(context.destination);
+                
+                // Create oscillators
+                this.bassOsc = context.createOscillator();
+                this.bassOsc.type = 'sine';
+                this.bassOsc.frequency.value = 55; // A1
+                
+                this.midOsc = context.createOscillator();
+                this.midOsc.type = 'square';
+                this.midOsc.frequency.value = 110; // A2
+                
+                this.highOsc = context.createOscillator();
+                this.highOsc.type = 'sawtooth';
+                this.highOsc.frequency.value = 220; // A3
+                
+                // Create filters
+                this.bassFilter = context.createBiquadFilter();
+                this.bassFilter.type = 'lowpass';
+                this.bassFilter.frequency.value = 200;
+                
+                this.midFilter = context.createBiquadFilter();
+                this.midFilter.type = 'bandpass';
+                this.midFilter.frequency.value = 1000;
+                
+                this.highFilter = context.createBiquadFilter();
+                this.highFilter.type = 'highpass';
+                this.highFilter.frequency.value = 2000;
+                
+                // Create LFOs
+                this.bassLFO = context.createOscillator();
+                this.bassLFO.frequency.value = 0.1;
+                this.bassLFOGain = context.createGain();
+                this.bassLFOGain.gain.value = 20;
+                
+                this.midLFO = context.createOscillator();
+                this.midLFO.frequency.value = 0.2;
+                this.midLFOGain = context.createGain();
+                this.midLFOGain.gain.value = 30;
+                
+                this.highLFO = context.createOscillator();
+                this.highLFO.frequency.value = 0.3;
+                this.highLFOGain = context.createGain();
+                this.highLFOGain.gain.value = 40;
+                
+                // Connect everything
+                this.bassLFO.connect(this.bassLFOGain);
+                this.bassLFOGain.connect(this.bassOsc.frequency);
+                this.bassOsc.connect(this.bassFilter);
+                this.bassFilter.connect(this.masterGain);
+                
+                this.midLFO.connect(this.midLFOGain);
+                this.midLFOGain.connect(this.midOsc.frequency);
+                this.midOsc.connect(this.midFilter);
+                this.midFilter.connect(this.masterGain);
+                
+                this.highLFO.connect(this.highLFOGain);
+                this.highLFOGain.connect(this.highOsc.frequency);
+                this.highOsc.connect(this.highFilter);
+                this.highFilter.connect(this.masterGain);
+                
+                // Start oscillators
+                this.bassOsc.start();
+                this.midOsc.start();
+                this.highOsc.start();
+                this.bassLFO.start();
+                this.midLFO.start();
+                this.highLFO.start();
+            }
+            
+            update(seed) {
+                // Use seed (369) to generate variations
+                const bassFreq = 55 + (seed % 10);
+                const midFreq = 110 + (seed % 20);
+                const highFreq = 220 + (seed % 30);
+                
+                this.bassOsc.frequency.setValueAtTime(bassFreq, this.context.currentTime);
+                this.midOsc.frequency.setValueAtTime(midFreq, this.context.currentTime);
+                this.highOsc.frequency.setValueAtTime(highFreq, this.context.currentTime);
+                
+                // Modulate filters
+                const bassMod = Math.sin(this.context.currentTime * 0.1) * 50 + 200;
+                const midMod = Math.sin(this.context.currentTime * 0.2) * 200 + 1000;
+                const highMod = Math.sin(this.context.currentTime * 0.3) * 500 + 2000;
+                
+                this.bassFilter.frequency.setValueAtTime(bassMod, this.context.currentTime);
+                this.midFilter.frequency.setValueAtTime(midMod, this.context.currentTime);
+                this.highFilter.frequency.setValueAtTime(highMod, this.context.currentTime);
+            }
+            
+            getAnalyser() {
+                return this.analyser;
+            }
+            
+            getAudioData() {
+                return this.audioData;
             }
         }
 
-        async function setupMusic() {
-            try {
-                const midiUrl = await getRandomMidiUrl();
-                const response = await fetch(midiUrl);
-                const arrayBuffer = await response.arrayBuffer();
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                return audioBuffer;
-            } catch (error) {
-                log('Error loading music: ' + error.message);
-                throw error;
-            }
-        }
-
-        let audioBuffer = null;
+        let synth = null;
         async function toggleMusic() {
             try {
-                if (!analyser) {
-                    analyser = setupAudioAnalysis();
-                }
-
-                if (!musicSource) {
-                    audioBuffer = await setupMusic();
-                    musicSource = audioContext.createBufferSource();
-                    musicSource.buffer = audioBuffer;
-                    musicSource.connect(analyser);
-                    analyser.connect(audioContext.destination);
-                    musicSource.loop = true;
-                    musicSource.start();
+                if (!synth) {
+                    synth = new TechnoSynth(audioContext);
+                    analyser = synth.getAnalyser();
+                    audioData = synth.getAudioData();
                     musicPlaying = true;
                 } else {
                     if (musicPlaying) {
-                        musicSource.stop();
+                        synth.masterGain.gain.setValueAtTime(0, audioContext.currentTime);
                         musicPlaying = false;
                     } else {
-                        musicSource = audioContext.createBufferSource();
-                        musicSource.buffer = audioBuffer;
-                        musicSource.connect(analyser);
-                        musicSource.loop = true;
-                        musicSource.start();
+                        synth.masterGain.gain.setValueAtTime(0.5, audioContext.currentTime);
                         musicPlaying = true;
                     }
                 }
@@ -245,15 +327,6 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             document.body.appendChild(renderer.domElement);
             log('Renderer created with size: ' + viewport.width + 'x' + viewport.height);
-
-            // Stats setup
-            const stats = new Stats();
-            stats.showPanel(0);
-            document.body.appendChild(stats.dom);
-            stats.dom.style.position = 'fixed';
-            stats.dom.style.top = '10px';
-            stats.dom.style.left = '10px';
-            stats.dom.style.zIndex = '1000';
 
             // Graph data
             let graph = { nodes: [], edges: [] };
@@ -395,6 +468,9 @@
                     bassLevel = average(audioData.slice(0, 4)) / 255;  // Low frequencies
                     midLevel = average(audioData.slice(4, 12)) / 255;  // Mid frequencies
                     trebleLevel = average(audioData.slice(12, 24)) / 255;  // High frequencies
+                    
+                    // Update synth with seed
+                    synth.update(369);
                 }
 
                 function average(array) {
@@ -475,11 +551,13 @@
             // Animation loop with error handling
             function animate() {
                 try {
-                    stats.begin();
+                    if (stats) stats.begin();
+                    
                     requestAnimationFrame(animate);
                     simulate();
                     renderer.render(scene, camera);
-                    stats.end();
+                    
+                    if (stats) stats.end();
                 } catch (error) {
                     log('Error in animation loop: ' + error.message);
                     console.error('Animation error:', error);
