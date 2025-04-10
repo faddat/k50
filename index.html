@@ -15,6 +15,14 @@
             width: 100vw;
             height: 100vh;
         }
+        #background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
         canvas {
             position: absolute;
             top: 50%;
@@ -322,6 +330,84 @@
             scene.background = new THREE.Color(0x0d041a);
             log('Scene created');
 
+            // Create background canvas
+            const backgroundCanvas = document.createElement('canvas');
+            backgroundCanvas.id = 'background';
+            document.body.appendChild(backgroundCanvas);
+            const bgCtx = backgroundCanvas.getContext('2d');
+            backgroundCanvas.width = window.innerWidth;
+            backgroundCanvas.height = window.innerHeight;
+
+            // Create background particles
+            const particles = [];
+            const particleCount = 100;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                    size: Math.random() * 3 + 1,
+                    speed: Math.random() * 2 + 1,
+                    angle: Math.random() * Math.PI * 2
+                });
+            }
+
+            // Background animation function
+            function animateBackground(bassLevel, midLevel, trebleLevel) {
+                bgCtx.fillStyle = 'rgba(13, 4, 26, 0.1)';
+                bgCtx.fillRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+
+                // Update particles
+                particles.forEach(particle => {
+                    // Audio-reactive movement
+                    const audioInfluence = (bassLevel + midLevel + trebleLevel) / 3;
+                    particle.angle += (Math.random() - 0.5) * 0.1 * (1 + audioInfluence);
+                    particle.x += Math.cos(particle.angle) * particle.speed * (1 + audioInfluence * 0.5);
+                    particle.y += Math.sin(particle.angle) * particle.speed * (1 + audioInfluence * 0.5);
+
+                    // Wrap around screen
+                    if (particle.x < 0) particle.x = window.innerWidth;
+                    if (particle.x > window.innerWidth) particle.x = 0;
+                    if (particle.y < 0) particle.y = window.innerHeight;
+                    if (particle.y > window.innerHeight) particle.y = 0;
+
+                    // Draw particle with audio-reactive size and color
+                    const size = particle.size * (1 + audioInfluence * 2);
+                    const hue = (Date.now() * 0.001 + particle.x * 0.001) % 360;
+                    bgCtx.fillStyle = `hsla(${hue}, 100%, 70%, ${0.3 + audioInfluence * 0.7})`;
+                    bgCtx.beginPath();
+                    bgCtx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
+                    bgCtx.fill();
+                });
+
+                // Add audio-reactive gradient overlay
+                const gradient = bgCtx.createRadialGradient(
+                    window.innerWidth / 2,
+                    window.innerHeight / 2,
+                    0,
+                    window.innerWidth / 2,
+                    window.innerHeight / 2,
+                    Math.max(window.innerWidth, window.innerHeight) * 0.5
+                );
+                const bassColor = `hsla(${(Date.now() * 0.01) % 360}, 100%, 50%, ${bassLevel * 0.1})`;
+                const midColor = `hsla(${(Date.now() * 0.02 + 120) % 360}, 100%, 50%, ${midLevel * 0.1})`;
+                const trebleColor = `hsla(${(Date.now() * 0.03 + 240) % 360}, 100%, 50%, ${trebleLevel * 0.1})`;
+                
+                gradient.addColorStop(0, bassColor);
+                gradient.addColorStop(0.5, midColor);
+                gradient.addColorStop(1, trebleColor);
+                
+                bgCtx.globalCompositeOperation = 'overlay';
+                bgCtx.fillStyle = gradient;
+                bgCtx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+                bgCtx.globalCompositeOperation = 'source-over';
+            }
+
+            // Update background on resize
+            window.addEventListener('resize', () => {
+                backgroundCanvas.width = window.innerWidth;
+                backgroundCanvas.height = window.innerHeight;
+            });
+
             // Viewport helper
             function getViewportSize() {
                 return {
@@ -415,6 +501,7 @@
             let graph = { nodes: [], edges: [] };
             let nodeSprites = [];
             let edgeLines = [];
+            let nodeTrails = []; // Array to store node trails
 
             // Create node sprite with error checking
             function createNodeSprite(color) {
@@ -454,6 +541,88 @@
                 }
             }
 
+            // Create node trail
+            function createNodeTrail(node, color) {
+                const trailLength = 20;
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(trailLength * 3);
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const material = new THREE.LineBasicMaterial({
+                    color: new THREE.Color(color),
+                    transparent: true,
+                    opacity: 0.5,
+                    linewidth: 3,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                const trail = new THREE.Line(geometry, material);
+                trail.userData = {
+                    positions: new Array(trailLength).fill().map(() => ({ x: node.x, y: node.y })),
+                    color: color
+                };
+                
+                return trail;
+            }
+
+            // Create enhanced edge material
+            function createEdgeMaterial() {
+                return new THREE.LineBasicMaterial({
+                    color: 0xffffff,
+                    opacity: 0.6,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    linewidth: 4
+                });
+            }
+
+            // Create edge glow effect
+            function createEdgeGlow(edge, source, target) {
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array([
+                    source.x, source.y, 0,
+                    target.x, target.y, 0
+                ]);
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const material = new THREE.LineBasicMaterial({
+                    color: 0xffffff,
+                    opacity: 0.3,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    linewidth: 8
+                });
+                
+                return new THREE.Line(geometry, material);
+            }
+
+            // Update node trail
+            function updateNodeTrail(trail, node, audioLevel) {
+                const positions = trail.geometry.attributes.position.array;
+                const trailData = trail.userData;
+                
+                // Shift positions back
+                trailData.positions.pop();
+                trailData.positions.unshift({ x: node.x, y: node.y });
+                
+                // Update geometry
+                trailData.positions.forEach((pos, i) => {
+                    const t = i / trailData.positions.length;
+                    positions[i * 3] = pos.x;
+                    positions[i * 3 + 1] = pos.y;
+                    positions[i * 3 + 2] = 0;
+                    
+                    // Update opacity based on position in trail
+                    trail.material.opacity = (0.5 + audioLevel * 0.5) * (1 - t);
+                });
+                
+                trail.geometry.attributes.position.needsUpdate = true;
+                
+                // Update color based on audio
+                const hue = (Date.now() * 0.001 + audioLevel * 180) % 360;
+                trail.material.color.setHSL(hue/360, 1, 0.7);
+            }
+
             // Generate complete graph with error checking
             function generateCompleteGraph(n) {
                 try {
@@ -491,38 +660,50 @@
             // Render graph with error checking
             function renderGraph() {
                 try {
+                    // Remove existing elements
                     nodeSprites.forEach(sprite => scene.remove(sprite));
                     edgeLines.forEach(line => scene.remove(line));
+                    nodeTrails.forEach(trail => scene.remove(trail));
+                    
                     nodeSprites = [];
                     edgeLines = [];
+                    nodeTrails = [];
 
-                    const material = new THREE.LineBasicMaterial({
-                        color: 0xffffff,
-                        opacity: 0.2,
-                        transparent: true,
-                        blending: THREE.AdditiveBlending
-                    });
-
-                    // Add nodes
+                    // Add nodes and their trails
                     graph.nodes.forEach(node => {
                         const sprite = createNodeSprite(node.color);
                         sprite.position.set(node.x, node.y, 0);
                         sprite.scale.set(100, 100, 1);
                         nodeSprites.push(sprite);
                         scene.add(sprite);
+                        
+                        const trail = createNodeTrail(node, node.color);
+                        nodeTrails.push(trail);
+                        scene.add(trail);
                     });
 
-                    // Add edges
+                    // Add edges with enhanced visibility
                     graph.edges.forEach(edge => {
+                        const source = graph.nodes[edge.source];
+                        const target = graph.nodes[edge.target];
+                        
+                        // Create main edge line
                         const geometry = new THREE.BufferGeometry();
                         const positions = new Float32Array([
-                            graph.nodes[edge.source].x, graph.nodes[edge.source].y, 0,
-                            graph.nodes[edge.target].x, graph.nodes[edge.target].y, 0
+                            source.x, source.y, 0,
+                            target.x, target.y, 0
                         ]);
                         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                        const line = new THREE.Line(geometry, material);
+                        
+                        const edgeMaterial = createEdgeMaterial();
+                        const line = new THREE.Line(geometry, edgeMaterial);
                         edgeLines.push(line);
                         scene.add(line);
+                        
+                        // Add glow effect
+                        const glow = createEdgeGlow(edge, source, target);
+                        edgeLines.push(glow);
+                        scene.add(glow);
                     });
 
                     log(`Rendered ${nodeSprites.length} nodes and ${edgeLines.length} edges`);
@@ -540,12 +721,13 @@
                 const centerForce = 0.015;
                 const damping = 0.98;
                 
-                // Get audio data from both music and microphone
+                // Initialize audio levels
                 let bassLevel = 0;
                 let midLevel = 0;
                 let trebleLevel = 0;
                 let overallLevel = 0;
                 
+                // Get audio data from both music and microphone
                 if (analyser && musicPlaying) {
                     analyser.getByteFrequencyData(audioData);
                     bassLevel = average(audioData.slice(0, 4)) / 255;
@@ -573,10 +755,73 @@
                     return array.reduce((a, b) => a + b, 0) / array.length;
                 }
 
-                // Time-based modulation for psychedelic effects
+                // Animate background
+                animateBackground(bassLevel, midLevel, trebleLevel);
+
+                // Enhanced time-based modulation for psychedelic effects
                 const time = Date.now() * 0.001;
                 const pulse = Math.sin(time * 2) * 0.5 + 0.5;
                 const swirl = Math.sin(time * 0.5) * 0.5 + 0.5;
+                const wave = Math.sin(time * 3) * 0.5 + 0.5;
+
+                // Update node trails
+                nodeTrails.forEach((trail, i) => {
+                    const node = graph.nodes[i];
+                    const audioLevel = (bassLevel + midLevel + trebleLevel) / 3;
+                    updateNodeTrail(trail, node, audioLevel);
+                });
+
+                // Enhanced edge effects
+                edgeLines.forEach((line, i) => {
+                    const isGlow = i % 2 === 1; // Every other line is a glow effect
+                    const edgeIndex = Math.floor(i / 2);
+                    const source = graph.nodes[graph.edges[edgeIndex].source];
+                    const target = graph.nodes[graph.edges[edgeIndex].target];
+                    
+                    const positions = line.geometry.attributes.position.array;
+                    
+                    if (isGlow) {
+                        // Update glow line
+                        positions[0] = source.x;
+                        positions[1] = source.y;
+                        positions[3] = target.x;
+                        positions[4] = target.y;
+                        
+                        // Glow effect properties
+                        const glowIntensity = 0.3 + (bassLevel * 0.4) + (pulse * 0.2);
+                        line.material.opacity = glowIntensity;
+                        line.material.linewidth = 8 + (bassLevel * 4);
+                    } else {
+                        // Enhanced wave effect to main edge line
+                        const midX = (source.x + target.x) / 2;
+                        const midY = (source.y + target.y) / 2;
+                        const dist = Math.sqrt(
+                            Math.pow(target.x - source.x, 2) + 
+                            Math.pow(target.y - source.y, 2)
+                        );
+                        
+                        const waveStrength = (trebleLevel * 20) * (1 + wave * 0.5);
+                        
+                        // Add multiple wave points for smoother curves
+                        const segments = 5; // Increased segments for smoother waves
+                        for (let j = 0; j <= segments; j++) {
+                            const t = j / segments;
+                            const x = source.x + (target.x - source.x) * t;
+                            const y = source.y + (target.y - source.y) * t;
+                            const waveOffset = Math.sin(time * 2 + edgeIndex * 0.1 + t * Math.PI) * waveStrength;
+                            positions[j * 3] = x + (target.y - source.y) / dist * waveOffset;
+                            positions[j * 3 + 1] = y - (target.x - source.x) / dist * waveOffset;
+                        }
+                        
+                        // Enhanced edge properties
+                        const hue = ((time * 20 + edgeIndex * 10) % 360);
+                        line.material.color.setHSL(hue/360, 1, 0.8 + trebleLevel * 0.2);
+                        line.material.opacity = 0.6 + (midLevel * 0.3) + (pulse * 0.2);
+                        line.material.linewidth = 4 + (bassLevel * 4);
+                    }
+                    
+                    line.geometry.attributes.position.needsUpdate = true;
+                });
 
                 // Apply forces with enhanced audio reactivity
                 graph.nodes.forEach((node, i) => {
@@ -598,8 +843,8 @@
                     // Enhanced audio-reactive forces
                     if (musicPlaying || isMicrophoneActive) {
                         const angle = (i * 2 * Math.PI / graph.nodes.length) + (swirl * Math.PI * 2);
-                        const bassForce = bassLevel * 50 * (1 + pulse * 0.5);
-                        const midForce = midLevel * 30 * (1 + Math.sin(time * 3) * 0.3);
+                        const bassForce = bassLevel * 30 * (1 + pulse * 0.5); // Reduced force
+                        const midForce = midLevel * 20 * (1 + Math.sin(time * 3) * 0.3); // Reduced force
                         
                         // Add swirling motion
                         fx += Math.cos(angle) * bassForce;
@@ -610,7 +855,7 @@
                         fy += Math.sin(time + i) * midForce;
 
                         // Enhanced size transitions with pulsing
-                        const baseScale = 80 * (1 + midLevel * 0.8);
+                        const baseScale = 60 * (1 + midLevel * 0.8); // Reduced size
                         const pulseScale = baseScale * (1 + pulse * 0.3);
                         const currentScale = nodeSprites[i].scale.x;
                         const newScale = currentScale + (pulseScale - currentScale) * 0.15;
@@ -627,10 +872,21 @@
                         nodeSprites[i].material.opacity = 0.7 + (trebleLevel * 0.3) + (pulse * 0.2);
                     }
 
-                    // Enhanced center attraction with audio modulation
-                    const centerStrength = centerForce * (1 + (bassLevel + midLevel) * 0.5);
-                    fx += -node.x * centerStrength;
-                    fy += -node.y * centerStrength;
+                    // Organic boundary forces with stronger containment
+                    const distFromCenter = Math.sqrt(node.x * node.x + node.y * node.y);
+                    const maxDist = bounds * (0.8 + bassLevel * 0.2); // Reduced maximum distance
+                    
+                    if (distFromCenter > maxDist) {
+                        // Stronger boundary force that increases gradually
+                        const boundaryForce = Math.pow((distFromCenter - maxDist) / maxDist, 2) * 0.8;
+                        fx -= node.x * boundaryForce;
+                        fy -= node.y * boundaryForce;
+                    } else {
+                        // Gentle center attraction
+                        const centerStrength = centerForce * (1 + (bassLevel + midLevel) * 0.3);
+                        fx -= node.x * centerStrength;
+                        fy -= node.y * centerStrength;
+                    }
 
                     // Update velocity and position with smoother transitions
                     node.vx = (node.vx + fx * 0.1) * damping;
@@ -638,52 +894,8 @@
                     node.x += node.vx;
                     node.y += node.vy;
 
-                    // Smoother boundary containment with audio-reactive bounce
-                    const bounceFactor = 0.3 + (bassLevel * 0.2);
-                    if (Math.abs(node.x) > bounds) {
-                        node.x = Math.sign(node.x) * bounds;
-                        node.vx *= -bounceFactor;
-                    }
-                    if (Math.abs(node.y) > bounds) {
-                        node.y = Math.sign(node.y) * bounds;
-                        node.vy *= -bounceFactor;
-                    }
-
                     // Update node position
                     nodeSprites[i].position.set(node.x, node.y, 0);
-                });
-
-                // Update edge positions with enhanced effects
-                edgeLines.forEach((line, i) => {
-                    const positions = line.geometry.attributes.position.array;
-                    const source = graph.nodes[graph.edges[i].source];
-                    const target = graph.nodes[graph.edges[i].target];
-                    
-                    // Add subtle wave effect to edges
-                    const midX = (source.x + target.x) / 2;
-                    const midY = (source.y + target.y) / 2;
-                    const dist = Math.sqrt(
-                        Math.pow(target.x - source.x, 2) + 
-                        Math.pow(target.y - source.y, 2)
-                    );
-                    
-                    const wave = Math.sin(time * 2 + i * 0.1) * (trebleLevel * 10);
-                    const offsetX = (target.y - source.y) / dist * wave;
-                    const offsetY = -(target.x - source.x) / dist * wave;
-                    
-                    positions[0] = source.x;
-                    positions[1] = source.y;
-                    positions[3] = target.x;
-                    positions[4] = target.y;
-                    
-                    // Add middle point for wave effect
-                    positions[6] = midX + offsetX;
-                    positions[7] = midY + offsetY;
-                    
-                    line.geometry.attributes.position.needsUpdate = true;
-                    
-                    // Update edge opacity based on audio
-                    line.material.opacity = 0.2 + (midLevel * 0.3) + (pulse * 0.1);
                 });
             }
 
@@ -730,7 +942,7 @@
             });
 
             // Initialize
-            generateCompleteGraph(9);
+            generateCompleteGraph(69);
             renderGraph();
             log('Initialization complete');
 
