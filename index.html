@@ -99,13 +99,13 @@
     <div class="controls">
         <button class="node-btn" data-nodes="1">1</button>
         <button class="node-btn" data-nodes="4">4</button>
-        <button class="node-btn active" data-nodes="369">369</button>
+        <button class="node-btn active" data-nodes="9">9</button>
         <button onclick="toggleDebug()">Debug</button>
     </div>
     <div class="audio-controls">
         <button onclick="toggleMusic()">🎵 Toggle Music</button>
     </div>
-    <div class="label" id="label">Kn = 369</div>
+    <div class="label" id="label">Kn = 9</div>
     <div id="debug"></div>
     
     <script>
@@ -346,7 +346,7 @@
             camera.position.z = 1000;
             log('Camera initialized at z=' + camera.position.z);
 
-            // Renderer setup with error checking
+            // Renderer setup with error checking and performance optimizations
             const renderer = new THREE.WebGLRenderer({
                 antialias: true,
                 alpha: true,
@@ -359,8 +359,57 @@
             
             renderer.setSize(viewport.width, viewport.height);
             renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setAnimationLoop(animate); // Use setAnimationLoop for better performance
             document.body.appendChild(renderer.domElement);
             log('Renderer created with size: ' + viewport.width + 'x' + viewport.height);
+
+            // Audio setup for microphone
+            let microphoneAnalyser = null;
+            let microphoneData = null;
+            let isMicrophoneActive = false;
+
+            async function setupMicrophone() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const source = audioContext.createMediaStreamSource(stream);
+                    microphoneAnalyser = audioContext.createAnalyser();
+                    microphoneAnalyser.fftSize = 256;
+                    microphoneData = new Uint8Array(microphoneAnalyser.frequencyBinCount);
+                    source.connect(microphoneAnalyser);
+                    isMicrophoneActive = true;
+                    log('Microphone setup successful');
+                } catch (error) {
+                    log('Error setting up microphone: ' + error.message);
+                }
+            }
+
+            // Add microphone button
+            const micButton = document.createElement('button');
+            micButton.textContent = '🎤 Toggle Microphone';
+            micButton.style.position = 'fixed';
+            micButton.style.top = '80px';
+            micButton.style.right = '20px';
+            micButton.style.zIndex = '10';
+            micButton.style.background = 'rgba(255, 215, 0, 0.2)';
+            micButton.style.border = '1px solid #ffd700';
+            micButton.style.color = '#ffd700';
+            micButton.style.padding = '10px';
+            micButton.style.cursor = 'pointer';
+            micButton.style.borderRadius = '5px';
+            micButton.style.fontFamily = 'Orbitron, sans-serif';
+            document.body.appendChild(micButton);
+
+            micButton.addEventListener('click', async () => {
+                if (!isMicrophoneActive) {
+                    await setupMicrophone();
+                    micButton.style.background = '#ffd700';
+                    micButton.style.color = '#0d041a';
+                } else {
+                    isMicrophoneActive = false;
+                    micButton.style.background = 'rgba(255, 215, 0, 0.2)';
+                    micButton.style.color = '#ffd700';
+                }
+            });
 
             // Graph data
             let graph = { nodes: [], edges: [] };
@@ -371,7 +420,7 @@
             function createNodeSprite(color) {
                 try {
                     const canvas = document.createElement('canvas');
-                    canvas.width = 256; // Increased canvas size
+                    canvas.width = 256;
                     canvas.height = 256;
                     const ctx = canvas.getContext('2d');
                     
@@ -379,7 +428,6 @@
                         throw new Error('Failed to get 2D context');
                     }
 
-                    // Create larger, more visible nodes with softer glow
                     const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
                     gradient.addColorStop(0, color);
                     gradient.addColorStop(0.2, color);
@@ -488,67 +536,99 @@
             function simulate() {
                 const viewport = getViewportSize();
                 const bounds = Math.min(viewport.width, viewport.height) * 0.4;
-                const charge = -800; // Reduced repulsion
-                const centerForce = 0.015; // Reduced center force
-                const damping = 0.98; // Increased damping for smoother movement
+                const charge = -800;
+                const centerForce = 0.015;
+                const damping = 0.98;
                 
-                // Get audio data if music is playing
+                // Get audio data from both music and microphone
                 let bassLevel = 0;
                 let midLevel = 0;
                 let trebleLevel = 0;
+                let overallLevel = 0;
                 
                 if (analyser && musicPlaying) {
                     analyser.getByteFrequencyData(audioData);
-                    
                     bassLevel = average(audioData.slice(0, 4)) / 255;
                     midLevel = average(audioData.slice(4, 12)) / 255;
                     trebleLevel = average(audioData.slice(12, 24)) / 255;
+                    overallLevel = average(audioData) / 255;
+                    if (synth) synth.update(9);
+                }
+
+                if (microphoneAnalyser && isMicrophoneActive) {
+                    microphoneAnalyser.getByteFrequencyData(microphoneData);
+                    const micBass = average(microphoneData.slice(0, 4)) / 255;
+                    const micMid = average(microphoneData.slice(4, 12)) / 255;
+                    const micTreble = average(microphoneData.slice(12, 24)) / 255;
+                    const micOverall = average(microphoneData) / 255;
                     
-                    if (synth) synth.update(369);
+                    // Combine music and microphone levels with emphasis on peaks
+                    bassLevel = Math.max(bassLevel, micBass * 1.5);
+                    midLevel = Math.max(midLevel, micMid * 1.5);
+                    trebleLevel = Math.max(trebleLevel, micTreble * 1.5);
+                    overallLevel = Math.max(overallLevel, micOverall * 1.5);
                 }
 
                 function average(array) {
                     return array.reduce((a, b) => a + b, 0) / array.length;
                 }
 
-                // Apply forces with smoother transitions
+                // Time-based modulation for psychedelic effects
+                const time = Date.now() * 0.001;
+                const pulse = Math.sin(time * 2) * 0.5 + 0.5;
+                const swirl = Math.sin(time * 0.5) * 0.5 + 0.5;
+
+                // Apply forces with enhanced audio reactivity
                 graph.nodes.forEach((node, i) => {
                     let fx = 0, fy = 0;
 
-                    // Smoother repulsion
+                    // Enhanced repulsion with audio modulation
                     graph.nodes.forEach(other => {
                         if (node !== other) {
                             const dx = node.x - other.x;
                             const dy = node.y - other.y;
                             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                            const force = charge / (dist * dist + 100); // Added offset to prevent extreme forces
+                            const audioMod = 1 + (bassLevel * 0.5);
+                            const force = (charge * audioMod) / (dist * dist + 100);
                             fx += force * dx / dist;
                             fy += force * dy / dist;
                         }
                     });
 
-                    // Audio-reactive forces with smoother transitions
-                    if (musicPlaying) {
-                        const angle = (i * 2 * Math.PI / graph.nodes.length);
-                        const bassForce = bassLevel * 30; // Reduced force
+                    // Enhanced audio-reactive forces
+                    if (musicPlaying || isMicrophoneActive) {
+                        const angle = (i * 2 * Math.PI / graph.nodes.length) + (swirl * Math.PI * 2);
+                        const bassForce = bassLevel * 50 * (1 + pulse * 0.5);
+                        const midForce = midLevel * 30 * (1 + Math.sin(time * 3) * 0.3);
+                        
+                        // Add swirling motion
                         fx += Math.cos(angle) * bassForce;
                         fy += Math.sin(angle) * bassForce;
+                        
+                        // Add pulsing motion
+                        fx += Math.cos(time + i) * midForce;
+                        fy += Math.sin(time + i) * midForce;
 
-                        // Smoother size transitions
-                        const targetScale = 80 * (1 + midLevel * 0.5); // Reduced scale range
+                        // Enhanced size transitions with pulsing
+                        const baseScale = 80 * (1 + midLevel * 0.8);
+                        const pulseScale = baseScale * (1 + pulse * 0.3);
                         const currentScale = nodeSprites[i].scale.x;
-                        const newScale = currentScale + (targetScale - currentScale) * 0.1;
+                        const newScale = currentScale + (pulseScale - currentScale) * 0.15;
                         nodeSprites[i].scale.set(newScale, newScale, 1);
 
-                        // Smoother color transitions
-                        const hue = (i * 360 / graph.nodes.length) % 360;
-                        const brightness = 60 + trebleLevel * 20; // Reduced brightness range
-                        node.color = `hsl(${hue}, 100%, ${brightness}%)`;
-                        nodeSprites[i].material.color.setHSL(hue/360, 1, brightness/100);
+                        // Enhanced color transitions with rainbow effect
+                        const hue = ((i * 360 / graph.nodes.length) + (time * 20) + (overallLevel * 180)) % 360;
+                        const saturation = 100;
+                        const brightness = 60 + trebleLevel * 30 + pulse * 20;
+                        node.color = `hsl(${hue}, ${saturation}%, ${brightness}%)`;
+                        nodeSprites[i].material.color.setHSL(hue/360, saturation/100, brightness/100);
+                        
+                        // Add opacity modulation
+                        nodeSprites[i].material.opacity = 0.7 + (trebleLevel * 0.3) + (pulse * 0.2);
                     }
 
-                    // Smoother center attraction
-                    const centerStrength = centerForce * (1 + (bassLevel + midLevel) * 0.3);
+                    // Enhanced center attraction with audio modulation
+                    const centerStrength = centerForce * (1 + (bassLevel + midLevel) * 0.5);
                     fx += -node.x * centerStrength;
                     fy += -node.y * centerStrength;
 
@@ -558,28 +638,52 @@
                     node.x += node.vx;
                     node.y += node.vy;
 
-                    // Smoother boundary containment
+                    // Smoother boundary containment with audio-reactive bounce
+                    const bounceFactor = 0.3 + (bassLevel * 0.2);
                     if (Math.abs(node.x) > bounds) {
                         node.x = Math.sign(node.x) * bounds;
-                        node.vx *= -0.3; // Gentler bounce
+                        node.vx *= -bounceFactor;
                     }
                     if (Math.abs(node.y) > bounds) {
                         node.y = Math.sign(node.y) * bounds;
-                        node.vy *= -0.3; // Gentler bounce
+                        node.vy *= -bounceFactor;
                     }
 
                     // Update node position
                     nodeSprites[i].position.set(node.x, node.y, 0);
                 });
 
-                // Update edge positions with smoother transitions
+                // Update edge positions with enhanced effects
                 edgeLines.forEach((line, i) => {
                     const positions = line.geometry.attributes.position.array;
-                    positions[0] = graph.nodes[graph.edges[i].source].x;
-                    positions[1] = graph.nodes[graph.edges[i].source].y;
-                    positions[3] = graph.nodes[graph.edges[i].target].x;
-                    positions[4] = graph.nodes[graph.edges[i].target].y;
+                    const source = graph.nodes[graph.edges[i].source];
+                    const target = graph.nodes[graph.edges[i].target];
+                    
+                    // Add subtle wave effect to edges
+                    const midX = (source.x + target.x) / 2;
+                    const midY = (source.y + target.y) / 2;
+                    const dist = Math.sqrt(
+                        Math.pow(target.x - source.x, 2) + 
+                        Math.pow(target.y - source.y, 2)
+                    );
+                    
+                    const wave = Math.sin(time * 2 + i * 0.1) * (trebleLevel * 10);
+                    const offsetX = (target.y - source.y) / dist * wave;
+                    const offsetY = -(target.x - source.x) / dist * wave;
+                    
+                    positions[0] = source.x;
+                    positions[1] = source.y;
+                    positions[3] = target.x;
+                    positions[4] = target.y;
+                    
+                    // Add middle point for wave effect
+                    positions[6] = midX + offsetX;
+                    positions[7] = midY + offsetY;
+                    
                     line.geometry.attributes.position.needsUpdate = true;
+                    
+                    // Update edge opacity based on audio
+                    line.material.opacity = 0.2 + (midLevel * 0.3) + (pulse * 0.1);
                 });
             }
 
@@ -588,7 +692,6 @@
                 try {
                     if (stats) stats.begin();
                     
-                    requestAnimationFrame(animate);
                     simulate();
                     renderer.render(scene, camera);
                     
@@ -627,16 +730,13 @@
             });
 
             // Initialize
-            generateCompleteGraph(369);
+            generateCompleteGraph(9);
             renderGraph();
-            animate();
             log('Initialization complete');
 
             // Start music automatically
             document.addEventListener('DOMContentLoaded', async () => {
                 try {
-                    // Most browsers require user interaction before playing audio
-                    // We'll show a message to help with this
                     const message = document.createElement('div');
                     message.style.position = 'fixed';
                     message.style.top = '50%';
@@ -652,7 +752,6 @@
                     message.innerHTML = 'Click anywhere to start the experience';
                     document.body.appendChild(message);
 
-                    // Start music on first click
                     const startAudio = async () => {
                         await toggleMusic();
                         message.remove();
