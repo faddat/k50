@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cosmos Hub Tattoo</title>
+    <title>K50 Visualization</title>
     <link rel="stylesheet" href="css/styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js"></script>
+    <!-- Load dependencies in head to ensure they're available before our modules -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js"></script>
 </head>
 <body>
     <div class="controls sliding-element">
-        <button onclick="toggleDebug()">Debug</button>
+        <button onclick="window.toggleDebug()">Debug</button>
     </div>
     <div class="audio-controls sliding-element">
         <button onclick="window.handleMusicToggle()">🎵 Toggle Music</button>
@@ -21,25 +22,51 @@
     </div>
     <div class="node-count-container sliding-element">
         <div class="label" id="label">Kn = </div>
-        <input type="number" id="nodeCount" min="3" max="200" value="69">
+        <input type="number" id="nodeCount" min="3" max="200" value="69" onchange="window.handleNodeCountChange(this.value)">
     </div>
     <div class="mode-indicator">Mode: Classic</div>
     <div id="debug"></div>
 
+    <!-- Initialize app -->
     <script type="module">
-        import { initVisualization, visualizationState } from './js/modules/visualization.js';
-        import { initControls, handleMusicToggle, handleMicrophoneToggle } from './js/modules/controls.js';
-        import { audioState } from './js/modules/audio.js';
+        // Create global namespace for our app
+        window.K50 = {
+            Stats: null,
+            handlers: {}
+        };
 
-        // Make handlers available globally
-        window.handleMusicToggle = handleMusicToggle;
-        window.handleMicrophoneToggle = handleMicrophoneToggle;
+        // Initialize Stats after ensuring it's loaded
+        if (typeof Stats !== 'undefined') {
+            window.K50.Stats = new Stats();
+        } else {
+            console.error('Stats.js not loaded properly');
+        }
 
-        // Initialize everything
-        document.addEventListener('DOMContentLoaded', () => {
-            initVisualization();
-            initControls();
-        });
+        // Import and initialize app
+        async function initializeApp() {
+            try {
+                const { initApp, toggleDebug, handleNodeCountChange } = await import('./js/modules/app.js');
+                const { handleMusicToggle, handleMicrophoneToggle } = await import('./js/modules/controls.js');
+
+                // Store handlers globally
+                window.toggleDebug = toggleDebug;
+                window.handleMusicToggle = handleMusicToggle;
+                window.handleMicrophoneToggle = handleMicrophoneToggle;
+                window.handleNodeCountChange = handleNodeCountChange;
+
+                // Initialize app
+                initApp();
+            } catch (error) {
+                console.error('Error initializing app:', error);
+            }
+        }
+
+        // Wait for DOM and initialize
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
     </script>
 </body>
 </html>
