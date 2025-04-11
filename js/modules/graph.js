@@ -4,6 +4,7 @@ import {
     createEdgeMaterial,
     updateGraphState,
 } from './visualization.js';
+import * as THREE from 'three';
 
 // Graph state
 const state = {
@@ -238,133 +239,166 @@ function createGraphObjects() {
 }
 
 // Process audio levels for visualization
-function processAudioLevels(audioLevels) {
-    const { bassLevel, midLevel, trebleLevel } = audioLevels;
-    // Increase energy sensitivity
+function processAudioLevels(audioLevels = {}) {
+    const { bassLevel = 0, midLevel = 0, trebleLevel = 0 } = audioLevels;
+
     const energy = (bassLevel * 1.8 + midLevel * 1.2 + trebleLevel) / 2;
-    const isBeat = bassLevel > 0.5 && bassLevel > midLevel * 1.2; // More sensitive beat detection
+    const isBeat = bassLevel > 0.5 && bassLevel > midLevel * 1.2;
 
     return {
-        energy: Math.min(1, energy * 1.5), // Boost overall energy more
+        energy: Math.min(1, energy * 1.5),
         isBeat,
-        bassLevel: bassLevel * 1.5, // Amplify bass impact
+        bassLevel: bassLevel * 1.5,
         midLevel: midLevel * 1.2,
         trebleLevel: trebleLevel * 1.3,
+        spectrum: {
+            bass: bassLevel,
+            lowMid: midLevel * 0.8,
+            mid: midLevel,
+            highMid: midLevel * 1.2,
+            treble: trebleLevel,
+        },
     };
 }
 
-// Update node positions with improved stability and music responsiveness
-export function updateNodePositions(audioLevels = { bassLevel: 0, midLevel: 0, trebleLevel: 0 }) {
+// Update node positions with enhanced music reactivity
+export function updateNodePositions(audioLevels = {}) {
     if (state.isUpdating) return;
 
     try {
-    // Sync visualization mode from global state
-        state.isClassicMode = visualizationState.isClassicMode;
+        const processedAudio = processAudioLevels(audioLevels);
+        const { energy = 0, bassLevel = 0, isBeat = false, spectrum = {} } = processedAudio;
 
-        const now = Date.now();
-        const bounds = Math.min(window.innerWidth, window.innerHeight) * 1.2;
-        const audio = processAudioLevels(audioLevels);
+        // Enhanced force calculations based on audio
+        const repulsionForce = 0.4 + energy * 0.6; // Increased base repulsion
+        const springForce = 0.1 + bassLevel * 0.2; // Reduced spring force
+        const maxSpeed = 3 + energy * 10; // Increased max speed
 
-        // Enhanced audio reactivity
-        const beatPulse = audio.isBeat ? Math.sin(now / 80) * audio.energy * 3 : 0; // Stronger beat pulse
-        const frequencyOscillation = Math.sin(now / 400) * audio.midLevel * 1.5; // More pronounced oscillation
-        const trebleShimmer = Math.cos(now / 150) * audio.trebleLevel * 1.5; // Enhanced shimmer
-
-        // Update existing effects
-        state.nodeTrails = state.nodeTrails.filter(trail => now - trail.timestamp < 800); // Longer trails
-        state.lightningArcs = state.lightningArcs.filter(arc => now - arc.timestamp < arc.duration);
-
-        // Generate new lightning on strong beats
-        if (audio.isBeat && audio.energy > 0.4) {
-            // More frequent lightning
-            const nodePairs = findConnectableNodes();
-            createLightningEffects(nodePairs, audio);
+        // Beat-reactive node scaling
+        if (isBeat) {
+            state.nodes.forEach(node => {
+                node.scale = 1.3 + energy * 0.7;
+                node.pulsePhase = 0;
+            });
         }
 
+        // Update node positions with increased spread
         state.nodes.forEach(node => {
-            if (now - node.lastUpdate < 16) return;
+            node.fx = 0;
+            node.fy = 0;
 
-            const prevX = node.x;
-            const prevY = node.y;
-            node.lastUpdate = now;
+            if (!node.phase) node.phase = Math.random() * Math.PI * 2;
+            const angle = node.phase;
+            const freqForce = 0.15 + (spectrum.mid || 0) * 0.5; // Increased frequency force
+            node.fx += Math.cos(angle) * freqForce;
+            node.fy += Math.sin(angle) * freqForce;
+            node.phase += 0.02 + (spectrum.highMid || 0) * 0.04;
 
-            // Use safeDistance for all distance calculations
+            // Enhanced node repulsion
             state.nodes.forEach(other => {
-                if (node === other) return;
-                const dx = other.x - node.x;
-                const dy = other.y - node.y;
-                const dist = safeDistance(dx, dy);
+                if (other !== node) {
+                    const dx = other.x - node.x;
+                    const dy = other.y - node.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
 
-                // Apply forces using safe distance
-                const force = calculateForce(node, other, dist, audio);
-                node.vx += (dx / dist) * force;
-                node.vy += (dy / dist) * force;
+                    if (dist < 150) {
+                        // Increased repulsion distance
+                        const force = repulsionForce * (1 - dist / 150);
+                        node.fx -= (dx / dist) * force;
+                        node.fy -= (dy / dist) * force;
+                    }
+                }
             });
 
-            // Enhanced music-reactive forces
-            const nodeEnergy = audio.energy * (1.5 + Math.sin(node.hue / 30 + now / 800));
-            node.vx *= 0.97 - nodeEnergy * 0.04; // Less damping
-            node.vy *= 0.97 - nodeEnergy * 0.04;
+            // Reduced edge spring forces
+            state.edges.forEach(edge => {
+                if (edge.source === node.id || edge.target === node.id) {
+                    const other =
+            edge.source === node.id ? state.nodes[edge.target] : state.nodes[edge.source];
 
-            // Stronger frequency-based oscillations
-            node.vx += Math.cos(node.hue / 30) * frequencyOscillation * 1.5;
-            node.vy += Math.sin(node.hue / 30) * frequencyOscillation * 1.5;
+                    if (!other) return;
 
-            // Enhanced treble shimmer
-            node.vx += (Math.random() - 0.5) * trebleShimmer * 2;
-            node.vy += (Math.random() - 0.5) * trebleShimmer * 2;
+                    const dx = other.x - node.x;
+                    const dy = other.y - node.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+                    const force = (springForce * (dist - 100)) / 100; // Increased rest length
 
-            // Stronger beat pulse effect
-            if (audio.isBeat) {
-                const angle = Math.atan2(node.y, node.x);
-                node.vx += Math.cos(angle) * beatPulse * 1.5;
-                node.vy += Math.sin(angle) * beatPulse * 1.5;
+                    node.fx += (dx / dist) * force;
+                    node.fy += (dy / dist) * force;
+                }
+            });
+
+            // Apply forces with reduced damping
+            const damping = 0.9 - energy * 0.1;
+            node.vx = (node.vx || 0) * damping + node.fx * (1 + bassLevel);
+            node.vy = (node.vy || 0) * damping + node.fy * (1 + bassLevel);
+
+            // Limit speed
+            const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+            if (speed > maxSpeed) {
+                node.vx = (node.vx / speed) * maxSpeed;
+                node.vy = (node.vy / speed) * maxSpeed;
             }
 
-            // Enhanced node interactions with stronger forces
-            applyNodeInteractions(node, audio);
-
-            // Apply cluster forces with more energy
-            if (state.clusterCenters.length > 0) {
-                applyClusterForces(node, audio);
-            }
-
-            // Higher velocity limits
-            const maxVelocity = 20 + audio.energy * 30;
-            node.vx = Math.max(-maxVelocity, Math.min(maxVelocity, node.vx));
-            node.vy = Math.max(-maxVelocity, Math.min(maxVelocity, node.vy));
+            // Add slight outward drift
+            const distFromCenter = Math.sqrt(node.x * node.x + node.y * node.y);
+            const outwardForce = 0.001 * (1 + energy * 0.2);
+            const outwardAngle = Math.atan2(node.y, node.x);
+            node.vx += Math.cos(outwardAngle) * outwardForce * distFromCenter * 0.01;
+            node.vy += Math.sin(outwardAngle) * outwardForce * distFromCenter * 0.01;
 
             // Update position
             node.x += node.vx;
             node.y += node.vy;
 
-            // Softer boundary forces with organic overflow
-            applyBoundaryForces(node, bounds, audio);
-
-            // More frequent trails
-            const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
-            if (speed > 10 || (audio.isBeat && speed > 5)) {
-                // Lower threshold for trails
-                createNodeTrail(node, prevX, prevY, speed);
-            }
+            // Update node effects
+            updateNodeEffects(node, { energy, spectrum, isBeat });
         });
 
-        // Update visualization state with new positions
+        // Apply boundary forces with larger bounds
+        state.nodes.forEach(node => {
+            applyBoundaryForces(node, 1200, { energy, bassLevel }); // Increased bounds
+        });
+
         updateGraphState(state.nodes, state.edges);
 
         return {
-            trails: state.nodeTrails.map(trail => ({
-                ...trail,
-                opacity: Math.max(0, 1 - (now - trail.timestamp) / 800),
-            })),
-            lightningArcs: state.lightningArcs.map(arc => ({
-                ...arc,
-                opacity: Math.max(0, 1 - (now - arc.timestamp) / arc.duration),
-            })),
+            trails: state.nodeTrails,
+            lightningArcs: state.lightningArcs,
         };
     } catch (error) {
-        console.error('Error updating node positions:', error);
-        state.isUpdating = false;
+        console.error('Error in updateNodePositions:', error);
+        return { trails: [], lightningArcs: [] };
+    }
+}
+
+// Enhanced node effects
+function updateNodeEffects(node, audioLevels) {
+    const { energy, spectrum, isBeat } = audioLevels;
+
+    // Update node color based on frequency content
+    const hueShift = (spectrum.treble - spectrum.bass) * 20;
+    node.hue = (node.baseHue + hueShift) % 360;
+
+    // Update node size with pulses
+    if (node.pulsePhase === undefined) node.pulsePhase = Math.random() * Math.PI * 2;
+    node.pulsePhase += 0.1 + energy * 0.2;
+    const pulseFactor = 0.2 + Math.sin(node.pulsePhase) * 0.1;
+    node.scale = (node.scale || 1) * (1 + pulseFactor * energy);
+
+    // Gradually return to normal scale
+    node.scale = 1 + (node.scale - 1) * 0.9;
+
+    // Beat-reactive glow
+    if (isBeat) {
+        node.glow = 1.5 + energy;
+    } else {
+        node.glow = 1 + (node.glow - 1) * 0.85;
+    }
+
+    // Update node trail generation
+    if (Math.sqrt(node.vx * node.vx + node.vy * node.vy) > 1 + energy * 2) {
+        createNodeTrail(node);
     }
 }
 
