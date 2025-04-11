@@ -8,7 +8,7 @@ const state = {
     stats: null,
     animationFrame: null,
     initialized: false,
-    lastAudioState: null // Track audio state changes
+    lastAudioState: null, // Track audio state changes
 };
 
 const _audioState = {
@@ -30,7 +30,7 @@ function initStats() {
 // Animation loop
 function animate() {
     state.animationFrame = requestAnimationFrame(animate);
-    
+
     if (state.isDebugMode && state.stats) {
         state.stats.begin();
     }
@@ -39,14 +39,14 @@ function animate() {
     const audioLevels = getAudioLevels();
     const currentAudioState = {
         isMicrophoneActive: audioState.isMicrophoneActive,
-        isMusicPlaying: audioState.isMusicPlaying
+        isMusicPlaying: audioState.isMusicPlaying,
     };
 
     // Handle audio source changes
     if (JSON.stringify(currentAudioState) !== JSON.stringify(state.lastAudioState)) {
         console.log('Audio state changed:', currentAudioState);
         state.lastAudioState = currentAudioState;
-        
+
         // Adjust visualization parameters based on audio source
         if (currentAudioState.isMicrophoneActive) {
             // Enhance sensitivity for microphone input
@@ -76,7 +76,7 @@ function animate() {
                 const edge = graphState.edges[edgeIndex];
                 const source = graphState.nodes[edge.source];
                 const target = graphState.nodes[edge.target];
-                
+
                 const positions = line.geometry.attributes.position.array;
                 positions[0] = source.x;
                 positions[1] = source.y;
@@ -101,31 +101,31 @@ function animate() {
 export function initApp() {
     try {
         console.log('Initializing app...');
-        
+
         // Initialize visualization first
         const viz = initVisualization();
         console.log('Visualization state:', viz);
 
         // Initialize stats
         initStats();
-        
+
         // Generate initial graph
         console.log('Generating initial graph...');
         const { nodeSprites, edgeLines } = generateCompleteGraph(69);
-        
+
         // Add objects to scene
         console.log('Adding objects to scene...');
         nodeSprites.forEach(sprite => visualizationState.scene.add(sprite));
         edgeLines.forEach(line => visualizationState.scene.add(line));
-        
+
         // Store in visualization state
         visualizationState.nodeSprites = nodeSprites;
         visualizationState.edgeLines = edgeLines;
-        
+
         // Start animation loop
         console.log('Starting animation loop...');
         animate();
-        
+
         state.initialized = true;
         console.log('App initialized successfully');
     } catch (error) {
@@ -147,7 +147,7 @@ export function handleNodeCountChange(count) {
     try {
         const n = Math.min(200, Math.max(3, parseInt(count) || 69));
         const { nodeSprites, edgeLines } = generateCompleteGraph(n);
-        
+
         // Clear existing objects
         if (visualizationState.nodeSprites) {
             visualizationState.nodeSprites.forEach(sprite => visualizationState.scene.remove(sprite));
@@ -155,11 +155,11 @@ export function handleNodeCountChange(count) {
         if (visualizationState.edgeLines) {
             visualizationState.edgeLines.forEach(line => visualizationState.scene.remove(line));
         }
-        
+
         // Add new objects
         nodeSprites.forEach(sprite => visualizationState.scene.add(sprite));
         edgeLines.forEach(line => visualizationState.scene.add(line));
-        
+
         // Update state
         visualizationState.nodeSprites = nodeSprites;
         visualizationState.edgeLines = edgeLines;
@@ -169,4 +169,4 @@ export function handleNodeCountChange(count) {
 }
 
 // Export state and functions
-export const appState = state; 
+export const appState = state;

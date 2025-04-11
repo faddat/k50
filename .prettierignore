@@ -1,0 +1,16 @@
+# Build output
+public/
+
+# Dependencies
+node_modules/
+
+# Generated files
+package-lock.json
+*.min.js
+*.min.css
+
+# Other
+.git/
+dist/
+coverage/
+vendor 

@@ -9,7 +9,7 @@ const state = {
     modeIndicator: null,
     debugButton: null,
     nodeCountInput: null,
-    modeToggle: null
+    modeToggle: null,
 };
 
 // Initialize controls
@@ -19,7 +19,7 @@ export function initControls() {
     state.nodeCountInput = document.getElementById('nodeCount');
     state.modeToggle = document.getElementById('mode');
     state.modeIndicator = document.querySelector('.mode-indicator');
-    
+
     setupDebugButton();
     setupNodeCountInput();
     setupModeToggle();
@@ -31,8 +31,9 @@ function setupDebugButton() {
         state.debugButton.addEventListener('click', () => {
             document.body.classList.toggle('debug');
             if (window.stats) {
-                window.stats.dom.style.display = 
-                    document.body.classList.contains('debug') ? 'block' : 'none';
+                window.stats.dom.style.display = document.body.classList.contains('debug')
+                    ? 'block'
+                    : 'none';
             }
         });
     }
@@ -51,7 +52,7 @@ function setupModeToggle() {
         state.modeToggle.addEventListener('click', () => {
             toggleVisualizationMode();
         });
-        
+
         // Initialize mode display
         updateModeDisplay(visualizationState.isClassicMode);
     }
@@ -68,11 +69,11 @@ function updateModeDisplay(isClassic) {
         state.modeToggle.textContent = isClassic ? 'Mode: Classic' : 'Mode: Dynamic';
         document.body.classList.toggle('classic-mode', isClassic);
     }
-    
+
     if (state.modeIndicator) {
         state.modeIndicator.textContent = `Mode: ${isClassic ? 'Classic' : 'Dynamic'}`;
         state.modeIndicator.classList.add('visible');
-        
+
         clearTimeout(state.controlsTimeout);
         state.controlsTimeout = setTimeout(() => {
             state.modeIndicator.classList.remove('visible');
@@ -95,7 +96,7 @@ function applyModeVisualChanges(isClassic) {
 function setupControlsVisibility() {
     const topControls = document.querySelectorAll('.controls, .audio-controls, .microphone-control');
     const bottomControls = document.querySelectorAll('.node-count-container');
-    
+
     function showControls() {
         clearTimeout(state.controlsTimeout);
         topControls.forEach(element => element.classList.remove('hidden'));
@@ -129,7 +130,7 @@ function setupControlsVisibility() {
 // Handle microphone toggle
 export function handleMicrophoneToggle() {
     const micButton = document.querySelector('.microphone-control button');
-    
+
     if (!audioState.isMicrophoneActive) {
         setupMicrophone();
         micButton.style.background = '#ffd700';
@@ -147,4 +148,4 @@ export function handleMusicToggle() {
 }
 
 // Export state
-export const controlsState = state; 
+export const controlsState = state;
