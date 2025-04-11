@@ -801,25 +801,25 @@
                 // Get audio data from both music and microphone
                 if (analyser && musicPlaying) {
                     analyser.getByteFrequencyData(audioData);
-                    bassLevel = average(audioData.slice(0, 4)) / 255;
-                    midLevel = average(audioData.slice(4, 12)) / 255;
-                    trebleLevel = average(audioData.slice(12, 24)) / 255;
-                    overallLevel = average(audioData) / 255;
+                    bassLevel = (average(audioData.slice(0, 4)) / 255) * 2.5; // Increased sensitivity
+                    midLevel = (average(audioData.slice(4, 12)) / 255) * 2.0;
+                    trebleLevel = (average(audioData.slice(12, 24)) / 255) * 2.0;
+                    overallLevel = (average(audioData) / 255) * 2.0;
                     if (synth) synth.update(9);
                 }
 
                 if (microphoneAnalyser && isMicrophoneActive) {
                     microphoneAnalyser.getByteFrequencyData(microphoneData);
-                    const micBass = average(microphoneData.slice(0, 4)) / 255;
-                    const micMid = average(microphoneData.slice(4, 12)) / 255;
-                    const micTreble = average(microphoneData.slice(12, 24)) / 255;
-                    const micOverall = average(microphoneData) / 255;
+                    const micBass = (average(microphoneData.slice(0, 4)) / 255) * 2.5;
+                    const micMid = (average(microphoneData.slice(4, 12)) / 255) * 2.0;
+                    const micTreble = (average(microphoneData.slice(12, 24)) / 255) * 2.0;
+                    const micOverall = (average(microphoneData) / 255) * 2.0;
                     
-                    // Combine music and microphone levels with emphasis on peaks
-                    bassLevel = Math.max(bassLevel, micBass * 1.5);
-                    midLevel = Math.max(midLevel, micMid * 1.5);
-                    trebleLevel = Math.max(trebleLevel, micTreble * 1.5);
-                    overallLevel = Math.max(overallLevel, micOverall * 1.5);
+                    // Combine music and microphone levels with increased sensitivity
+                    bassLevel = Math.max(bassLevel, micBass * 2.0);
+                    midLevel = Math.max(midLevel, micMid * 1.8);
+                    trebleLevel = Math.max(trebleLevel, micTreble * 1.8);
+                    overallLevel = Math.max(overallLevel, micOverall * 1.8);
                 }
 
                 function average(array) {
@@ -962,6 +962,9 @@
                     // Update node position
                     nodeSprites[i].position.set(node.x, node.y, 0);
                 });
+
+                // Update color intensity based on audio
+                updateColorIntensity(bassLevel, midLevel, trebleLevel);
             }
 
             // Animation loop with error handling
@@ -1059,64 +1062,55 @@
             controlPanel.style.color = 'white';
             document.body.appendChild(controlPanel);
 
-            // Add node count slider
-            const nodeCountLabel = document.createElement('label');
-            nodeCountLabel.innerText = 'Node Count: ';
-            controlPanel.appendChild(nodeCountLabel);
+            // Add node count input in lower-left corner
+            const nodeCountInput = document.createElement('input');
+            nodeCountInput.type = 'number';
+            nodeCountInput.min = '10';
+            nodeCountInput.max = '200';
+            nodeCountInput.value = '69';
+            nodeCountInput.style.position = 'fixed';
+            nodeCountInput.style.bottom = '20px';
+            nodeCountInput.style.left = '120px';
+            nodeCountInput.style.width = '60px';
+            nodeCountInput.style.background = 'rgba(255, 215, 0, 0.2)';
+            nodeCountInput.style.border = '1px solid #ffd700';
+            nodeCountInput.style.color = '#ffd700';
+            nodeCountInput.style.padding = '5px';
+            nodeCountInput.style.borderRadius = '5px';
+            nodeCountInput.style.fontFamily = 'Orbitron, sans-serif';
+            nodeCountInput.style.fontSize = '16px';
+            nodeCountInput.style.zIndex = '10';
+            document.body.appendChild(nodeCountInput);
 
-            const nodeCountSlider = document.createElement('input');
-            nodeCountSlider.type = 'range';
-            nodeCountSlider.min = '10';
-            nodeCountSlider.max = '200';
-            nodeCountSlider.value = '69';
-            nodeCountSlider.oninput = function() {
-                generateCompleteGraph(parseInt(nodeCountSlider.value));
-            };
-            controlPanel.appendChild(nodeCountSlider);
+            nodeCountInput.addEventListener('change', () => {
+                const n = Math.min(200, Math.max(10, parseInt(nodeCountInput.value) || 69));
+                nodeCountInput.value = n;
+                generateCompleteGraph(n);
+                renderGraph();
+            });
 
-            // Add color intensity slider
-            const colorIntensityLabel = document.createElement('label');
-            colorIntensityLabel.innerText = 'Color Intensity: ';
-            controlPanel.appendChild(colorIntensityLabel);
+            // Remove node count slider from control panel
+            const nodeCountLabel = controlPanel.querySelector('label');
+            const nodeCountSlider = controlPanel.querySelector('input[type="range"]');
+            if (nodeCountLabel) nodeCountLabel.remove();
+            if (nodeCountSlider) nodeCountSlider.remove();
 
-            const colorIntensitySlider = document.createElement('input');
-            colorIntensitySlider.type = 'range';
-            colorIntensitySlider.min = '0.5';
-            colorIntensitySlider.max = '2';
-            colorIntensitySlider.step = '0.1';
-            colorIntensitySlider.value = '1';
-            colorIntensitySlider.oninput = function() {
-                const intensity = parseFloat(colorIntensitySlider.value);
+            // Remove color intensity slider and make it respond to music
+            const colorIntensityLabel = controlPanel.querySelector('label[for="colorIntensity"]');
+            const colorIntensitySlider = controlPanel.querySelector('input[type="range"][min="0.5"]');
+            if (colorIntensityLabel) colorIntensityLabel.remove();
+            if (colorIntensitySlider) colorIntensitySlider.remove();
+
+            // Update color intensity based on audio levels
+            function updateColorIntensity(bassLevel, midLevel, trebleLevel) {
+                const intensity = 1.0 + (bassLevel * 0.8) + (midLevel * 0.6) + (trebleLevel * 0.4);
                 edgeLines.forEach(line => {
-                    line.material.opacity *= intensity;
-                    line.material.color.multiplyScalar(intensity);
+                    line.material.opacity = Math.min(1.0, intensity);
+                    const currentHue = line.material.color.getHSL({}).h;
+                    const currentSat = line.material.color.getHSL({}).s;
+                    line.material.color.setHSL(currentHue, currentSat, Math.min(1.0, intensity));
                 });
-            };
-            controlPanel.appendChild(colorIntensitySlider);
-
-            // Add audio sensitivity slider
-            const audioSensitivityLabel = document.createElement('label');
-            audioSensitivityLabel.innerText = 'Audio Sensitivity: ';
-            controlPanel.appendChild(audioSensitivityLabel);
-
-            const audioSensitivitySlider = document.createElement('input');
-            audioSensitivitySlider.type = 'range';
-            audioSensitivitySlider.min = '0.5';
-            audioSensitivitySlider.max = '2';
-            audioSensitivitySlider.step = '0.1';
-            audioSensitivitySlider.value = '1';
-            audioSensitivitySlider.oninput = function() {
-                const sensitivity = parseFloat(audioSensitivitySlider.value);
-                bassLevel *= sensitivity;
-                midLevel *= sensitivity;
-                trebleLevel *= sensitivity;
-            };
-            controlPanel.appendChild(audioSensitivitySlider);
-
-            // Add line breaks for better layout
-            controlPanel.appendChild(document.createElement('br'));
-            controlPanel.appendChild(document.createElement('br'));
-            controlPanel.appendChild(document.createElement('br'));
+            }
 
             // Add theme selector
             const themeSelector = document.createElement('select');
@@ -1194,28 +1188,6 @@
                 waveCtx.strokeStyle = '#ffd700';
                 waveCtx.stroke();
             }
-
-            // Adjust speed based on audio levels
-            const speedMultiplier = 1.0 + bassLevel * 1.5; // Vary speed with bass level
-
-            // Update velocity and position with variable speed
-            node.vx = (node.vx + fx * 0.1 * speedMultiplier) * damping;
-            node.vy = (node.vy + fy * 0.1 * speedMultiplier) * damping;
-            node.x += node.vx;
-            node.y += node.vy;
-
-            // Optimize rendering
-            renderer.setAnimationLoop(() => {
-                if (stats) stats.begin();
-                simulate();
-                renderer.render(scene, camera);
-                if (analyser && musicPlaying) {
-                    analyser.getByteFrequencyData(audioData);
-                    drawFrequencyBars(audioData);
-                    drawWaveform(audioData);
-                }
-                if (stats) stats.end();
-            });
 
             // Hide controls and show on mouse movement
             const slidingControls = document.querySelector('.controls');
