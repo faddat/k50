@@ -118,7 +118,176 @@
     <div class="label" id="label">Kn = 9</div>
     <div id="debug"></div>
     
-    <script>
+    <script type="module">
+        import { VisualizationManager } from './visualizations/VisualizationManager.js';
+
+        // Initialize visualization manager
+        const visualizationManager = new VisualizationManager();
+        
+        // Update visualization mode selector
+        const vizModeSelector = document.createElement('select');
+        vizModeSelector.style.marginTop = '10px';
+        vizModeSelector.style.marginLeft = '10px';
+        vizModeSelector.style.background = 'rgba(255, 215, 0, 0.2)';
+        vizModeSelector.style.border = '1px solid #ffd700';
+        vizModeSelector.style.color = '#ffd700';
+        vizModeSelector.style.padding = '5px';
+        vizModeSelector.style.borderRadius = '5px';
+        vizModeSelector.style.fontFamily = 'Orbitron, sans-serif';
+        
+        visualizationManager.getAvailableModes().forEach(mode => {
+            const option = document.createElement('option');
+            option.value = mode;
+            option.innerText = mode.charAt(0).toUpperCase() + mode.slice(1);
+            vizModeSelector.appendChild(option);
+        });
+        
+        controlPanel.appendChild(vizModeSelector);
+
+        vizModeSelector.onchange = function() {
+            visualizationManager.setMode(vizModeSelector.value);
+            generateCompleteGraph(graph.nodes.length);
+            renderGraph();
+        };
+
+        // Update generateCompleteGraph function
+        function generateCompleteGraph(n) {
+            try {
+                const viewport = getViewportSize();
+                const initialPositions = visualizationManager.getInitialPositions(n, viewport);
+                
+                graph.nodes = initialPositions.map((pos, i) => ({
+                    id: i,
+                    x: pos.x,
+                    y: pos.y,
+                    vx: 0,
+                    vy: 0,
+                    color: `hsl(${(i * 360 / n) % 360}, 100%, 70%)`
+                }));
+
+                graph.edges = [];
+                for (let i = 0; i < n; i++) {
+                    for (let j = i + 1; j < n; j++) {
+                        graph.edges.push({ source: i, target: j });
+                    }
+                }
+
+                document.getElementById('label').textContent = `Kn = ${n}`;
+                log(`Generated graph with ${n} nodes and ${graph.edges.length} edges in ${visualizationManager.getCurrentMode()} mode`);
+            } catch (error) {
+                log('Error generating graph: ' + error.message);
+                throw error;
+            }
+        }
+
+        // Update simulate function
+        function simulate() {
+            const viewport = getViewportSize();
+            
+            // Initialize audio levels
+            let bassLevel = 0;
+            let midLevel = 0;
+            let trebleLevel = 0;
+            let overallLevel = 0;
+            
+            // Get audio data from both music and microphone
+            if (analyser && musicPlaying) {
+                analyser.getByteFrequencyData(audioData);
+                bassLevel = (average(audioData.slice(0, 4)) / 255) * 2.5;
+                midLevel = (average(audioData.slice(4, 12)) / 255) * 2.0;
+                trebleLevel = (average(audioData.slice(12, 24)) / 255) * 2.0;
+                overallLevel = (average(audioData) / 255) * 2.0;
+                if (synth) synth.update(9);
+            }
+
+            if (microphoneAnalyser && isMicrophoneActive) {
+                microphoneAnalyser.getByteFrequencyData(microphoneData);
+                const micBass = (average(microphoneData.slice(0, 4)) / 255) * 2.5;
+                const micMid = (average(microphoneData.slice(4, 12)) / 255) * 2.0;
+                const micTreble = (average(microphoneData.slice(12, 24)) / 255) * 2.0;
+                const micOverall = (average(microphoneData) / 255) * 2.0;
+                
+                // Combine music and microphone levels
+                bassLevel = Math.max(bassLevel, micBass * 2.0);
+                midLevel = Math.max(midLevel, micMid * 1.8);
+                trebleLevel = Math.max(trebleLevel, micTreble * 1.8);
+                overallLevel = Math.max(overallLevel, micOverall * 1.8);
+            }
+
+            // Animate background
+            animateBackground(bassLevel, midLevel, trebleLevel);
+
+            // Update node positions using visualization manager
+            visualizationManager.updatePositions(graph.nodes, {
+                bassLevel,
+                midLevel,
+                trebleLevel,
+                overallLevel
+            }, viewport, Date.now() * 0.001);
+
+            // Update visual elements
+            graph.nodes.forEach((node, i) => {
+                // Update node position
+                nodeSprites[i].position.set(node.x, node.y, 0);
+
+                // Update visual effects
+                if (musicPlaying || isMicrophoneActive) {
+                    const time = Date.now() * 0.001;
+                    const pulse = Math.sin(time * 2) * 0.5 + 0.5;
+                    
+                    // Enhanced size transitions with pulsing
+                    const baseScale = 40 * (1 + midLevel * 0.8);
+                    const pulseScale = baseScale * (1 + pulse * 0.3);
+                    const currentScale = nodeSprites[i].scale.x;
+                    const newScale = currentScale + (pulseScale - currentScale) * 0.15;
+                    nodeSprites[i].scale.set(newScale, newScale, 1);
+
+                    // Enhanced color transitions with rainbow effect
+                    const hue = ((i * 360 / graph.nodes.length) + (time * 20) + (overallLevel * 180)) % 360;
+                    const saturation = 100;
+                    const brightness = 60 + trebleLevel * 30 + pulse * 20;
+                    node.color = `hsl(${hue}, ${saturation}%, ${brightness}%)`;
+                    nodeSprites[i].material.color.setHSL(hue/360, saturation/100, brightness/100);
+                    
+                    // Add opacity modulation
+                    nodeSprites[i].material.opacity = 0.7 + (trebleLevel * 0.3) + (pulse * 0.2);
+                }
+            });
+
+            // Update edges
+            edgeLines.forEach((line, i) => {
+                const isGlow = i % 2 === 1;
+                const edgeIndex = Math.floor(i / 2);
+                const source = graph.nodes[graph.edges[edgeIndex].source];
+                const target = graph.nodes[graph.edges[edgeIndex].target];
+                
+                const positions = line.geometry.attributes.position.array;
+                positions[0] = source.x;
+                positions[1] = source.y;
+                positions[3] = target.x;
+                positions[4] = target.y;
+                line.geometry.attributes.position.needsUpdate = true;
+
+                // Update edge effects
+                if (musicPlaying || isMicrophoneActive) {
+                    const time = Date.now() * 0.001;
+                    if (isGlow) {
+                        const glowIntensity = 1.0 + (bassLevel * 0.4) + (Math.sin(time * 2) * 0.2);
+                        const glowHue = ((time * 20 + edgeIndex * 5) % 360);
+                        line.material.color.setHSL(glowHue/360, 1, 1.0);
+                        line.material.opacity = glowIntensity;
+                    } else {
+                        const hue = ((time * 20 + edgeIndex * 10 + midLevel * 180) % 360);
+                        line.material.color.setHSL(hue/360, 1, 1.0);
+                        line.material.opacity = 1.0 + (midLevel * 0.3);
+                    }
+                }
+            });
+
+            // Update color intensity based on audio
+            updateColorIntensity(bassLevel, midLevel, trebleLevel);
+        }
+
         // Debug helper
         const debug = document.getElementById('debug');
         function log(msg) {
@@ -694,277 +863,15 @@
                 trail.material.color.setHSL(hue/360, 1, 0.7);
             }
 
-            // Generate complete graph with geometric arrangement
-            function generateCompleteGraph(n) {
-                try {
-                    const viewport = getViewportSize();
-                    const radius = Math.min(viewport.width, viewport.height) * 0.4; // Adjusted radius for geometry
-                    const angleIncrement = (2 * Math.PI) / n;
-                    
-                    graph.nodes = Array.from({ length: n }, (_, i) => {
-                        const angle = i * angleIncrement;
-                        return {
-                            id: i,
-                            x: Math.cos(angle) * radius,
-                            y: Math.sin(angle) * radius,
-                            vx: 0,
-                            vy: 0,
-                            color: `hsl(${(i * 360 / n) % 360}, 100%, 70%)`
-                        };
-                    });
-
-                    graph.edges = [];
-                    for (let i = 0; i < n; i++) {
-                        for (let j = i + 1; j < n; j++) {
-                            graph.edges.push({ source: i, target: j });
-                        }
-                    }
-
-                    document.getElementById('label').textContent = `Kn = ${n}`;
-                    log(`Generated graph with ${n} nodes and ${graph.edges.length} edges`);
-                } catch (error) {
-                    log('Error generating graph: ' + error.message);
-                    throw error;
-                }
-            }
-
-            // Render graph with error checking
-            function renderGraph() {
-                try {
-                    // Remove existing elements
-                    nodeSprites.forEach(sprite => scene.remove(sprite));
-                    edgeLines.forEach(line => scene.remove(line));
-                    nodeTrails.forEach(trail => scene.remove(trail));
-                    
-                    nodeSprites = [];
-                    edgeLines = [];
-                    nodeTrails = [];
-
-                    // Add nodes and their trails
-                    graph.nodes.forEach(node => {
-                        const sprite = createNodeSprite(node.color);
-                        sprite.position.set(node.x, node.y, 0);
-                        sprite.scale.set(100, 100, 1);
-                        nodeSprites.push(sprite);
-                        scene.add(sprite);
-                        
-                        const trail = createNodeTrail(node, node.color);
-                        nodeTrails.push(trail);
-                        scene.add(trail);
-                    });
-
-                    // Add edges with enhanced visibility
-                    graph.edges.forEach(edge => {
-                        const source = graph.nodes[edge.source];
-                        const target = graph.nodes[edge.target];
-                        
-                        // Create main edge line
-                        const geometry = new THREE.BufferGeometry();
-                        const positions = new Float32Array([
-                            source.x, source.y, 0,
-                            target.x, target.y, 0
-                        ]);
-                        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                        
-                        const edgeMaterial = createEdgeMaterial();
-                        const line = new THREE.Line(geometry, edgeMaterial);
-                        edgeLines.push(line);
-                        scene.add(line);
-                        
-                        // Add glow effect
-                        const glow = createEdgeGlow(edge, source, target);
-                        edgeLines.push(glow);
-                        scene.add(glow);
-                    });
-
-                    log(`Rendered ${nodeSprites.length} nodes and ${edgeLines.length} edges`);
-                } catch (error) {
-                    log('Error rendering graph: ' + error.message);
-                    throw error;
-                }
-            }
-
-            // Force simulation with audio reactivity
-            function simulate() {
-                const viewport = getViewportSize();
-                const bounds = Math.min(viewport.width, viewport.height) * 0.8; // Increased boundary size
-                const charge = -1200; // Stronger repulsion
-                const centerForce = 0.02; // Slightly stronger center force
-                const damping = 0.98;
-                
-                // Initialize audio levels
-                let bassLevel = 0;
-                let midLevel = 0;
-                let trebleLevel = 0;
-                let overallLevel = 0;
-                
-                // Get audio data from both music and microphone
-                if (analyser && musicPlaying) {
-                    analyser.getByteFrequencyData(audioData);
-                    bassLevel = (average(audioData.slice(0, 4)) / 255) * 2.5; // Increased sensitivity
-                    midLevel = (average(audioData.slice(4, 12)) / 255) * 2.0;
-                    trebleLevel = (average(audioData.slice(12, 24)) / 255) * 2.0;
-                    overallLevel = (average(audioData) / 255) * 2.0;
-                    if (synth) synth.update(9);
-                }
-
-                if (microphoneAnalyser && isMicrophoneActive) {
-                    microphoneAnalyser.getByteFrequencyData(microphoneData);
-                    const micBass = (average(microphoneData.slice(0, 4)) / 255) * 2.5;
-                    const micMid = (average(microphoneData.slice(4, 12)) / 255) * 2.0;
-                    const micTreble = (average(microphoneData.slice(12, 24)) / 255) * 2.0;
-                    const micOverall = (average(microphoneData) / 255) * 2.0;
-                    
-                    // Combine music and microphone levels with increased sensitivity
-                    bassLevel = Math.max(bassLevel, micBass * 2.0);
-                    midLevel = Math.max(midLevel, micMid * 1.8);
-                    trebleLevel = Math.max(trebleLevel, micTreble * 1.8);
-                    overallLevel = Math.max(overallLevel, micOverall * 1.8);
-                }
-
-                function average(array) {
-                    return array.reduce((a, b) => a + b, 0) / array.length;
-                }
-
-                // Animate background
-                animateBackground(bassLevel, midLevel, trebleLevel);
-
-                // Enhanced time-based modulation for psychedelic effects
-                const time = Date.now() * 0.001;
-                const pulse = Math.sin(time * 2) * 0.5 + 0.5;
-                const swirl = Math.sin(time * 0.5) * 0.5 + 0.5;
-                const wave = Math.sin(time * 3) * 0.5 + 0.5;
-
-                // Update node trails
-                nodeTrails.forEach((trail, i) => {
-                    const node = graph.nodes[i];
-                    const audioLevel = (bassLevel + midLevel + trebleLevel) / 3;
-                    updateNodeTrail(trail, node, audioLevel);
+            // Update color intensity based on audio levels
+            function updateColorIntensity(bassLevel, midLevel, trebleLevel) {
+                const intensity = 1.0 + (bassLevel * 0.8) + (midLevel * 0.6) + (trebleLevel * 0.4);
+                edgeLines.forEach(line => {
+                    line.material.opacity = Math.min(1.0, intensity);
+                    const currentHue = line.material.color.getHSL({}).h;
+                    const currentSat = line.material.color.getHSL({}).s;
+                    line.material.color.setHSL(currentHue, currentSat, Math.min(1.0, intensity));
                 });
-
-                // Enhanced edge effects with pulsating animations
-                edgeLines.forEach((line, i) => {
-                    const isGlow = i % 2 === 1;
-                    const edgeIndex = Math.floor(i / 2);
-                    const source = graph.nodes[graph.edges[edgeIndex].source];
-                    const target = graph.nodes[graph.edges[edgeIndex].target];
-                    
-                    const positions = line.geometry.attributes.position.array;
-                    
-                    if (isGlow) {
-                        // Update glow line
-                        positions[0] = source.x;
-                        positions[1] = source.y;
-                        positions[3] = target.x;
-                        positions[4] = target.y;
-                        
-                        // Enhanced glow effect properties
-                        const glowIntensity = 1.0 + (bassLevel * 0.4) + (pulse * 0.2); // Maximum intensity
-                        const glowHue = ((time * 20 + edgeIndex * 5) % 360);
-                        line.material.color.setHSL(glowHue/360, 1, 1.0); // Full brightness
-                        line.material.opacity = glowIntensity;
-                        line.material.linewidth = 24 + (bassLevel * 4); // Maximum line width
-                    } else {
-                        // Enhanced wave effect to main edge line
-                        const segments = 5;
-                        for (let j = 0; j <= segments; j++) {
-                            const t = j / segments;
-                            const x = source.x + (target.x - source.x) * t;
-                            const y = source.y + (target.y - source.y) * t;
-                            const waveOffset = Math.sin(time * 2 + edgeIndex * 0.1 + t * Math.PI) * (trebleLevel * 20);
-                            positions[j * 3] = x + (target.y - source.y) / dist * waveOffset;
-                            positions[j * 3 + 1] = y - (target.x - source.x) / dist * waveOffset;
-                        }
-                        
-                        // Dynamic color based on audio and position
-                        const hue = ((time * 20 + edgeIndex * 10 + midLevel * 180) % 360);
-                        const saturation = 1;
-                        const brightness = 1.0 + trebleLevel * 0.2; // Full brightness
-                        line.material.color.setHSL(hue/360, saturation, brightness);
-                        line.material.opacity = 1.0 + (midLevel * 0.3) + (pulse * 0.2); // Full opacity
-                        line.material.linewidth = 20 + (bassLevel * 4); // Maximum line width
-                    }
-                    
-                    line.geometry.attributes.position.needsUpdate = true;
-                });
-
-                // Apply forces with enhanced audio reactivity
-                graph.nodes.forEach((node, i) => {
-                    let fx = 0, fy = 0;
-
-                    // Enhanced repulsion with audio modulation
-                    graph.nodes.forEach(other => {
-                        if (node !== other) {
-                            const dx = node.x - other.x;
-                            const dy = node.y - other.y;
-                            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                            const audioMod = 1 + (bassLevel * 0.5);
-                            const force = (charge * audioMod) / (dist * dist + 100);
-                            fx += force * dx / dist;
-                            fy += force * dy / dist;
-                        }
-                    });
-
-                    // Enhanced audio-reactive forces
-                    if (musicPlaying || isMicrophoneActive) {
-                        const angle = (i * 2 * Math.PI / graph.nodes.length) + (swirl * Math.PI * 2);
-                        const bassForce = bassLevel * 50 * (1 + pulse * 0.5); // Increased force
-                        const midForce = midLevel * 40 * (1 + Math.sin(time * 3) * 0.3); // Increased force
-                        
-                        // Add swirling motion
-                        fx += Math.cos(angle) * bassForce;
-                        fy += Math.sin(angle) * bassForce;
-                        
-                        // Add pulsing motion
-                        fx += Math.cos(time + i) * midForce;
-                        fy += Math.sin(time + i) * midForce;
-
-                        // Enhanced size transitions with pulsing
-                        const baseScale = 40 * (1 + midLevel * 0.8); // Reduced node size
-                        const pulseScale = baseScale * (1 + pulse * 0.3);
-                        const currentScale = nodeSprites[i].scale.x;
-                        const newScale = currentScale + (pulseScale - currentScale) * 0.15;
-                        nodeSprites[i].scale.set(newScale, newScale, 1);
-
-                        // Enhanced color transitions with rainbow effect
-                        const hue = ((i * 360 / graph.nodes.length) + (time * 20) + (overallLevel * 180)) % 360;
-                        const saturation = 100;
-                        const brightness = 60 + trebleLevel * 30 + pulse * 20;
-                        node.color = `hsl(${hue}, ${saturation}%, ${brightness}%)`;
-                        nodeSprites[i].material.color.setHSL(hue/360, saturation/100, brightness/100);
-                        
-                        // Add opacity modulation
-                        nodeSprites[i].material.opacity = 0.7 + (trebleLevel * 0.3) + (pulse * 0.2);
-                    }
-
-                    // Organic boundary forces with softer containment
-                    const distFromCenter = Math.sqrt(node.x * node.x + node.y * node.y);
-                    const maxDist = bounds * (0.9 + bassLevel * 0.1); // Increased maximum distance
-                    
-                    if (distFromCenter > maxDist) {
-                        // Softer boundary force that increases gradually
-                        const boundaryForce = Math.pow((distFromCenter - maxDist) / maxDist, 2) * 0.5; // Reduced force
-                        fx -= node.x * boundaryForce;
-                        fy -= node.y * boundaryForce;
-                    } else {
-                        // Very gentle center attraction
-                        const centerStrength = centerForce * (1 + (bassLevel + midLevel) * 0.2);
-                        fx -= node.x * centerStrength;
-                        fy -= node.y * centerStrength;
-                    }
-
-                    // Update velocity and position with smoother transitions
-                    node.vx = (node.vx + fx * 0.1) * damping;
-                    node.vy = (node.vy + fy * 0.1) * damping;
-                    node.x += node.vx;
-                    node.y += node.vy;
-
-                    // Update node position
-                    nodeSprites[i].position.set(node.x, node.y, 0);
-                });
-
-                // Update color intensity based on audio
-                updateColorIntensity(bassLevel, midLevel, trebleLevel);
             }
 
             // Animation loop with error handling
@@ -1100,17 +1007,6 @@
             const colorIntensitySlider = controlPanel.querySelector('input[type="range"][min="0.5"]');
             if (colorIntensityLabel) colorIntensityLabel.remove();
             if (colorIntensitySlider) colorIntensitySlider.remove();
-
-            // Update color intensity based on audio levels
-            function updateColorIntensity(bassLevel, midLevel, trebleLevel) {
-                const intensity = 1.0 + (bassLevel * 0.8) + (midLevel * 0.6) + (trebleLevel * 0.4);
-                edgeLines.forEach(line => {
-                    line.material.opacity = Math.min(1.0, intensity);
-                    const currentHue = line.material.color.getHSL({}).h;
-                    const currentSat = line.material.color.getHSL({}).s;
-                    line.material.color.setHSL(currentHue, currentSat, Math.min(1.0, intensity));
-                });
-            }
 
             // Add theme selector
             const themeSelector = document.createElement('select');
