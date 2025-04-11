@@ -11,22 +11,22 @@
     <script src="https://raw.githubusercontent.com/mrdoob/stats.js/master/build/stats.min.js"></script>
 </head>
 <body>
-    <div class="controls sliding-element">
-        <button onclick="window.toggleDebug()">Debug</button>
+    <div class="controls">
+        <button onclick="window.K50.toggleDebug()">Debug</button>
     </div>
-    <div class="audio-controls sliding-element">
-        <button onclick="window.handleMusicToggle()">🎵 Toggle Music</button>
+    <div class="audio-controls">
+        <button onclick="window.K50.toggleMusic()">Toggle Music</button>
     </div>
-    <div class="microphone-control sliding-element">
-        <button onclick="window.handleMicrophoneToggle()">🎤 Toggle Microphone</button>
+    <div class="microphone-control">
+        <button onclick="window.K50.handleMicrophoneToggle()">Toggle Microphone</button>
     </div>
     <div class="node-count-container sliding-element">
         <div class="label" id="label">Kn = </div>
-        <input type="number" id="nodeCount" min="3" max="200" value="180" onchange="window.handleNodeCountChange(this.value)">
+        <input type="number" id="nodeCount" min="3" max="200" value="180" onchange="window.K50.handleNodeCountChange(this.value)">
     </div>
     <div class="mode-indicator">Mode: Classic</div>
     <div id="debug"></div>
-
+    
     <!-- Initialize app -->
     <script>
         // Load Stats.js manually since GitHub raw content doesn't work directly
@@ -64,45 +64,25 @@
     </script>
 
     <script type="module">
-        // Create global namespace for our app
+        import { initApp, toggleDebug, handleNodeCountChange } from './js/modules/app.js';
+        import { handleMicrophoneToggle, handleMusicToggle } from './js/modules/controls.js';
+
+        // Create global namespace for the app
         window.K50 = {
-            Stats: null,
-            handlers: {}
+            toggleDebug,
+            handleNodeCountChange,
+            handleMicrophoneToggle,
+            handleMusicToggle
         };
 
-        // Initialize app after ensuring Stats.js is loaded
-        async function initializeApp() {
+        // Initialize the app when the window loads
+        window.addEventListener('load', () => {
             try {
-                // Try to load Stats.js
-                const statsLoaded = await loadStats();
-                if (statsLoaded) {
-                    window.K50.Stats = new Stats();
-                } else {
-                    console.error('Failed to load Stats.js from all sources');
-                }
-
-                const { initApp, toggleDebug, handleNodeCountChange } = await import('./js/modules/app.js');
-                const { handleMusicToggle, handleMicrophoneToggle } = await import('./js/modules/controls.js');
-
-                // Store handlers globally
-                window.toggleDebug = toggleDebug;
-                window.handleMusicToggle = handleMusicToggle;
-                window.handleMicrophoneToggle = handleMicrophoneToggle;
-                window.handleNodeCountChange = handleNodeCountChange;
-
-                // Initialize app
                 initApp();
             } catch (error) {
-                console.error('Error initializing app:', error);
+                console.error('Failed to initialize app:', error);
             }
-        }
-
-        // Wait for DOM and initialize
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeApp);
-        } else {
-            initializeApp();
-        }
+        });
     </script>
 </body>
 </html>
