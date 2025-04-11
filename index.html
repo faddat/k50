@@ -99,6 +99,25 @@
             background: #ffd700;
             color: #0d041a;
         }
+        .mode-switch {
+            position: fixed;
+            top: 140px;
+            right: 20px;
+            z-index: 10;
+        }
+        .mode-switch button {
+            background: rgba(255, 215, 0, 0.2);
+            border: 1px solid #ffd700;
+            color: #ffd700;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Orbitron', sans-serif;
+        }
+        .mode-switch button:hover {
+            background: #ffd700;
+            color: #0d041a;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
     <!-- Load Stats.js first -->
@@ -114,6 +133,9 @@
     </div>
     <div class="audio-controls">
         <button onclick="toggleMusic()">🎵 Toggle Music</button>
+    </div>
+    <div class="mode-switch">
+        <button onclick="toggleVisualizationMode()">🔄 Switch Mode</button>
     </div>
     <div class="label" id="label">Kn = 9</div>
     <div id="debug"></div>
@@ -574,6 +596,14 @@
             let edgeLines = [];
             let nodeTrails = []; // Array to store node trails
 
+            let isClassicMode = true; // Track current visualization mode
+
+            // Function to toggle between visualization modes
+            function toggleVisualizationMode() {
+                isClassicMode = !isClassicMode;
+                renderGraph(); // Re-render with new mode
+            }
+
             // Create node sprite with error checking
             function createNodeSprite(color) {
                 try {
@@ -586,14 +616,25 @@
                         throw new Error('Failed to get 2D context');
                     }
 
-                    const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-                    gradient.addColorStop(0, color);
-                    gradient.addColorStop(0.2, color);
-                    gradient.addColorStop(0.4, color.replace(')', ', 0.5)'));
-                    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-                    
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(0, 0, 256, 256);
+                    if (isClassicMode) {
+                        // Classic mode: Simple dot with glow
+                        const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+                        gradient.addColorStop(0, color);
+                        gradient.addColorStop(0.3, color);
+                        gradient.addColorStop(0.5, color.replace(')', ', 0.5)'));
+                        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(0, 0, 256, 256);
+                    } else {
+                        // Fluid mode: Larger, more diffuse glow
+                        const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+                        gradient.addColorStop(0, color);
+                        gradient.addColorStop(0.2, color);
+                        gradient.addColorStop(0.4, color.replace(')', ', 0.5)'));
+                        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(0, 0, 256, 256);
+                    }
                     
                     const texture = new THREE.Texture(canvas);
                     texture.needsUpdate = true;
@@ -636,15 +677,25 @@
                 return trail;
             }
 
-            // Create enhanced edge material with maximum visibility
+            // Create edge material with mode-specific settings
             function createEdgeMaterial() {
-                return new THREE.LineBasicMaterial({
-                    color: 0xffffff,
-                    opacity: 1.0, // Full opacity
-                    transparent: true,
-                    blending: THREE.AdditiveBlending,
-                    linewidth: 20 // Maximum line width
-                });
+                if (isClassicMode) {
+                    return new THREE.LineBasicMaterial({
+                        color: 0xffffff,
+                        opacity: 0.8,
+                        transparent: true,
+                        blending: THREE.NormalBlending,
+                        linewidth: 1
+                    });
+                } else {
+                    return new THREE.LineBasicMaterial({
+                        color: 0xffffff,
+                        opacity: 1.0,
+                        transparent: true,
+                        blending: THREE.AdditiveBlending,
+                        linewidth: 20
+                    });
+                }
             }
 
             // Create edge glow effect with maximum visibility
@@ -787,10 +838,10 @@
             // Force simulation with audio reactivity
             function simulate() {
                 const viewport = getViewportSize();
-                const bounds = Math.min(viewport.width, viewport.height) * 0.8; // Increased boundary size
-                const charge = -1200; // Stronger repulsion
-                const centerForce = 0.02; // Slightly stronger center force
-                const damping = 0.98;
+                const bounds = Math.min(viewport.width, viewport.height) * 0.8;
+                const charge = isClassicMode ? -800 : -1200; // Adjust forces based on mode
+                const centerForce = isClassicMode ? 0.01 : 0.02;
+                const damping = isClassicMode ? 0.95 : 0.98;
                 
                 // Initialize audio levels
                 let bassLevel = 0;
@@ -835,19 +886,23 @@
                 const swirl = Math.sin(time * 0.5) * 0.5 + 0.5;
                 const wave = Math.sin(time * 3) * 0.5 + 0.5;
 
-                // Update node trails
-                nodeTrails.forEach((trail, i) => {
-                    const node = graph.nodes[i];
-                    const audioLevel = (bassLevel + midLevel + trebleLevel) / 3;
-                    updateNodeTrail(trail, node, audioLevel);
-                });
+                // Update node trails only in fluid mode
+                if (!isClassicMode) {
+                    nodeTrails.forEach((trail, i) => {
+                        const node = graph.nodes[i];
+                        const audioLevel = (bassLevel + midLevel + trebleLevel) / 3;
+                        updateNodeTrail(trail, node, audioLevel);
+                    });
+                }
 
-                // Enhanced edge effects with pulsating animations
+                // Enhanced edge effects with mode-specific settings
                 edgeLines.forEach((line, i) => {
                     const isGlow = i % 2 === 1;
-                    const edgeIndex = Math.floor(i / 2);
-                    const source = graph.nodes[graph.edges[edgeIndex].source];
-                    const target = graph.nodes[graph.edges[edgeIndex].target];
+                    if (isClassicMode && isGlow) {
+                        line.visible = false;
+                        return;
+                    }
+                    line.visible = true;
                     
                     const positions = line.geometry.attributes.position.array;
                     
@@ -860,7 +915,7 @@
                         
                         // Enhanced glow effect properties
                         const glowIntensity = 1.0 + (bassLevel * 0.4) + (pulse * 0.2); // Maximum intensity
-                        const glowHue = ((time * 20 + edgeIndex * 5) % 360);
+                        const glowHue = ((time * 20 + i * 5) % 360);
                         line.material.color.setHSL(glowHue/360, 1, 1.0); // Full brightness
                         line.material.opacity = glowIntensity;
                         line.material.linewidth = 24 + (bassLevel * 4); // Maximum line width
@@ -871,13 +926,13 @@
                             const t = j / segments;
                             const x = source.x + (target.x - source.x) * t;
                             const y = source.y + (target.y - source.y) * t;
-                            const waveOffset = Math.sin(time * 2 + edgeIndex * 0.1 + t * Math.PI) * (trebleLevel * 20);
+                            const waveOffset = Math.sin(time * 2 + i * 0.1 + t * Math.PI) * (trebleLevel * 20);
                             positions[j * 3] = x + (target.y - source.y) / dist * waveOffset;
                             positions[j * 3 + 1] = y - (target.x - source.x) / dist * waveOffset;
                         }
                         
                         // Dynamic color based on audio and position
-                        const hue = ((time * 20 + edgeIndex * 10 + midLevel * 180) % 360);
+                        const hue = ((time * 20 + i * 10 + midLevel * 180) % 360);
                         const saturation = 1;
                         const brightness = 1.0 + trebleLevel * 0.2; // Full brightness
                         line.material.color.setHSL(hue/360, saturation, brightness);
