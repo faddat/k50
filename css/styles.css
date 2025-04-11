@@ -46,9 +46,9 @@ canvas {
 /* Base button styles */
 .controls button,
 .audio-controls button {
-  background: rgb(0, 0, 0, 0.5);
-  border: 1px solid rgb(255, 255, 255, 0.2);
-  color: rgb(255, 255, 255, 0.8);
+  background: rgb(0 0 0 / 50%);
+  border: 1px solid rgb(255 255 255 / 20%);
+  color: rgb(255 255 255 / 80%);
   padding: 0.5rem 1rem;
   border-radius: 4px;
   cursor: pointer;
@@ -59,16 +59,16 @@ canvas {
 /* Button hover state */
 .controls button:hover,
 .audio-controls button:hover {
-  background: rgb(255, 255, 255, 0.1);
-  border-color: rgb(255, 255, 255, 0.4);
+  background: rgb(255 255 255 / 10%);
+  border-color: rgb(255 255 255 / 40%);
   color: #fff;
 }
 
 /* Active state for all buttons */
 .controls button.active,
 .audio-controls button.active {
-  background: rgb(255, 255, 255, 0.2);
-  border-color: rgb(255, 255, 255, 0.6);
+  background: rgb(255 255 255 / 20%);
+  border-color: rgb(255 255 255 / 60%);
   color: #fff;
 }
 
@@ -76,14 +76,14 @@ canvas {
   position: fixed;
   bottom: 1rem;
   left: 1rem;
-  color: rgb(255, 255, 255, 0.5);
+  color: rgb(255 255 255 / 50%);
   font-family: monospace;
   font-size: 0.8rem;
   z-index: 100;
 }
 
 .debug .fps {
-  color: rgb(255, 255, 255, 0.8);
+  color: rgb(255 255 255 / 80%);
 }
 
 #stats {
@@ -123,7 +123,7 @@ canvas {
 
 .node-count-container input {
   width: 60px;
-  background: rgb(255 215 0 / 0.2);
+  background: rgb(255 215 0 / 20%);
   border: 1px solid #ffd700;
   color: #ffd700;
   padding: 8px;
@@ -136,7 +136,7 @@ canvas {
 .node-count-container input:focus {
   outline: none;
   border-color: #fff;
-  background: rgb(255 215 0 / 0.3);
+  background: rgb(255 215 0 / 30%);
 }
 
 .node-count-container .label {
@@ -173,7 +173,7 @@ canvas {
   transition: opacity 0.5s ease;
   z-index: 10;
   text-align: right;
-  text-shadow: 0 0 10px rgb(255 215 0 / 0.5);
+  text-shadow: 0 0 10px rgb(255 215 0 / 50%);
 }
 
 .mode-indicator.visible {
@@ -187,7 +187,7 @@ canvas {
   color: #ffd700;
   font-family: monospace;
   z-index: 1000;
-  background: rgb(0 0 0 / 0.7);
+  background: rgb(0 0 0 / 70%);
   padding: 10px;
   border-radius: 5px;
   display: none;
