@@ -2,52 +2,162 @@ import { visualizationState, createNodeSprite, createEdgeMaterial } from './visu
 
 // Graph state
 const state = {
-    currentNodeCount: 69,
+    currentNodeCount: 180,
     nodes: [],
-    edges: []
+    edges: [],
+    clusterCenters: [],
+    clusterPhase: 0,
+    lastClusterUpdate: Date.now(),
+    transitionProgress: 0,
+    isUpdating: false,
+    musicEnergy: 0, // Track overall music energy
+    lastBeat: Date.now(), // Track beat timing
+    beatCount: 0, // Count beats for pattern variation
+    nodeTrails: [], // Track node trails for shooting star effect
+    lightningArcs: [] // Track active lightning arcs
 };
+
+// Safe math operations
+const safeDivide = (a, b, fallback = 0) => (b === 0 ? fallback : a / b);
+const safeDistance = (dx, dy) => Math.sqrt(dx * dx + dy * dy) || 0.0001;
 
 // Generate complete graph with n nodes
 export function generateCompleteGraph(n) {
     console.log('Generating complete graph with', n, 'nodes');
     
     try {
+        // Input validation
+        n = Math.max(3, Math.min(200, Math.floor(n) || 180));
+        
+        if (state.isUpdating) {
+            console.warn('Already updating graph, request queued');
+            return null;
+        }
+        
+        state.isUpdating = true;
         state.currentNodeCount = n;
         state.nodes = [];
         state.edges = [];
+        state.clusterCenters = [];
+        state.clusterPhase = 0;
 
-        // Create nodes
+        // Create nodes with color information
         for (let i = 0; i < n; i++) {
             const angle = (i / n) * Math.PI * 2;
             const radius = 300;
+            const hue = (i / n) * 360;
             state.nodes.push({
                 id: i,
                 x: Math.cos(angle) * radius,
                 y: Math.sin(angle) * radius,
                 vx: 0,
-                vy: 0
+                vy: 0,
+                clusterId: -1,
+                hue: hue,
+                color: `hsl(${hue}, 100%, 50%)`,
+                lastUpdate: Date.now()
             });
         }
 
-        // Create edges (complete graph: every node connected to every other node)
+        // Create edges with safety checks
         for (let i = 0; i < n; i++) {
             for (let j = i + 1; j < n; j++) {
-                state.edges.push({
-                    source: i,
-                    target: j
-                });
+                if (state.nodes[i] && state.nodes[j]) {
+                    state.edges.push({
+                        source: i,
+                        target: j
+                    });
+                }
             }
         }
 
-        console.log('Created graph structure:', {
-            nodes: state.nodes.length,
-            edges: state.edges.length
-        });
+        updateClusterCenters();
 
-        return createGraphObjects();
+        const result = createGraphObjects();
+        state.isUpdating = false;
+        return result;
     } catch (error) {
         console.error('Error generating complete graph:', error);
-        throw error;
+        state.isUpdating = false;
+        return null;
+    }
+}
+
+// Calculate color similarity with safety checks
+function getColorSimilarity(hue1, hue2) {
+    try {
+        const h1 = ((hue1 % 360) + 360) % 360;
+        const h2 = ((hue2 % 360) + 360) % 360;
+        const diff = Math.abs(h1 - h2);
+        return 1 - Math.min(diff, 360 - diff) / 180;
+    } catch (error) {
+        console.warn('Color similarity calculation error:', error);
+        return 0;
+    }
+}
+
+// Update cluster centers with safety checks
+function updateClusterCenters() {
+    try {
+        const now = Date.now();
+        const timeSinceLastUpdate = now - state.lastClusterUpdate;
+        
+        // Prevent too frequent updates
+        if (timeSinceLastUpdate < 16) return; // Max 60fps
+        
+        state.transitionProgress = Math.min(1, safeDivide(timeSinceLastUpdate, 2000));
+
+        if (timeSinceLastUpdate > 15000) {
+            state.lastClusterUpdate = now;
+            state.clusterPhase = (state.clusterPhase + 0.1) % 1;
+            state.transitionProgress = 0;
+
+            const clusterCount = state.clusterPhase < 0.5 ? 
+                1 + Math.floor(6 * Math.sin(state.clusterPhase * Math.PI) ** 2) : 1;
+
+            if (!state.nodes.length) return;
+
+            if (clusterCount === 1) {
+                state.clusterCenters = [{
+                    x: 0,
+                    y: 0,
+                    hue: 0,
+                    radius: 0
+                }];
+                state.nodes.forEach(node => node.clusterId = 0);
+            } else {
+                state.clusterCenters = [];
+                const screenRadius = Math.min(window.innerWidth, window.innerHeight) * 0.35;
+                
+                for (let i = 0; i < clusterCount; i++) {
+                    const hue = (i / clusterCount) * 360;
+                    const angle = (i / clusterCount) * Math.PI * 2;
+                    const radius = screenRadius * (0.3 + 0.7 * safeDivide(i, clusterCount));
+                    state.clusterCenters.push({
+                        x: Math.cos(angle) * radius,
+                        y: Math.sin(angle) * radius,
+                        hue: hue,
+                        radius: 150 + (i * 20)
+                    });
+                }
+
+                state.nodes.forEach(node => {
+                    let maxSimilarity = -1;
+                    let bestCluster = 0;
+                    state.clusterCenters.forEach((center, idx) => {
+                        const similarity = getColorSimilarity(node.hue, center.hue);
+                        if (similarity > maxSimilarity) {
+                            maxSimilarity = similarity;
+                            bestCluster = idx;
+                        }
+                    });
+                    node.clusterId = bestCluster;
+                    node.colorSimilarity = maxSimilarity;
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error updating cluster centers:', error);
     }
 }
 
@@ -60,12 +170,10 @@ function createGraphObjects() {
         const edgeLines = [];
 
         // Create node sprites
-        state.nodes.forEach((node, i) => {
-            const hue = (i / state.nodes.length);
-            const color = `hsl(${hue * 360}, 100%, 50%)`;
-            const sprite = createNodeSprite(color);
+        state.nodes.forEach(node => {
+            const sprite = createNodeSprite(node.color);
             sprite.position.set(node.x, node.y, 0);
-            sprite.scale.set(50, 50, 1);
+            sprite.scale.set(75, 75, 1);
             nodeSprites.push(sprite);
         });
 
@@ -101,52 +209,254 @@ function createGraphObjects() {
     }
 }
 
-// Update node positions based on forces
-export function updateNodePositions(audioLevels) {
-    const { bassLevel, midLevel, trebleLevel } = audioLevels;
-    const bounds = Math.min(window.innerWidth, window.innerHeight) * 0.8;
-    const charge = -800 - (bassLevel * 400);
-    const centerForce = 0.01 + (midLevel * 0.01);
-    const damping = 0.95;
+// Enhanced audio processing
+function processAudioLevels(audioLevels) {
+    const { bassLevel = 0, midLevel = 0, trebleLevel = 0 } = audioLevels;
+    
+    // Calculate overall music energy (0-1)
+    const energy = Math.min(1, (bassLevel * 1.5 + midLevel + trebleLevel * 0.8) / 2);
+    
+    // Detect beats using bass level
+    const now = Date.now();
+    const timeSinceBeat = now - state.lastBeat;
+    if (bassLevel > 0.6 && timeSinceBeat > 200) { // Beat detection threshold
+        state.lastBeat = now;
+        state.beatCount++;
+    }
+    
+    // Smooth energy transitions
+    state.musicEnergy = state.musicEnergy * 0.8 + energy * 0.2;
+    
+    return {
+        energy: state.musicEnergy,
+        isBeat: timeSinceBeat < 100,
+        beatPhase: Math.min(1, timeSinceBeat / 200)
+    };
+}
 
-    // Calculate forces
-    state.nodes.forEach(node => {
-        node.vx *= damping;
-        node.vy *= damping;
+// Lightning arc generation
+function createLightningArc(start, end, color, intensity) {
+    const points = [];
+    const segments = 12;
+    const maxOffset = 50 * intensity;
+    
+    // Create jagged path between points
+    for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const x = start.x + (end.x - start.x) * t;
+        const y = start.y + (end.y - start.y) * t;
+        
+        // Add random offset except for start/end points
+        if (i > 0 && i < segments) {
+            const offset = (Math.random() - 0.5) * maxOffset * Math.sin(Math.PI * t);
+            points.push({
+                x: x + offset,
+                y: y + offset
+            });
+        } else {
+            points.push({ x, y });
+        }
+    }
+    
+    return {
+        points,
+        color,
+        timestamp: Date.now(),
+        intensity,
+        duration: 200 + Math.random() * 300 // Random duration between 200-500ms
+    };
+}
 
-        // Repulsion between nodes
-        state.nodes.forEach(other => {
-            if (node === other) return;
-            const dx = other.x - node.x;
-            const dy = other.y - node.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 1) return;
-            const force = charge / (dist * dist);
-            node.vx += dx * force / dist;
-            node.vy += dy * force / dist;
+// Update node positions with improved stability and music responsiveness
+export function updateNodePositions(audioLevels = { bassLevel: 0, midLevel: 0, trebleLevel: 0 }) {
+    if (state.isUpdating) return;
+    
+    try {
+        const now = Date.now();
+        const bounds = Math.min(window.innerWidth, window.innerHeight) * 0.8;
+        const audio = processAudioLevels(audioLevels);
+        
+        // Update existing effects
+        state.nodeTrails = state.nodeTrails.filter(trail => now - trail.timestamp < 500);
+        state.lightningArcs = state.lightningArcs.filter(arc => now - arc.timestamp < arc.duration);
+        
+        // Generate new lightning on strong beats
+        if (audio.isBeat && audio.energy > 0.6) {
+            // Find nodes to connect with lightning
+            const nodePairs = [];
+            state.nodes.forEach((node, i) => {
+                state.nodes.slice(i + 1).forEach(other => {
+                    const dx = other.x - node.x;
+                    const dy = other.y - node.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const colorSimilarity = getColorSimilarity(node.hue, other.hue);
+                    
+                    // Connect similar-colored nodes that are far apart
+                    if (colorSimilarity > 0.85 && dist > 300 && dist < 800) {
+                        nodePairs.push({
+                            start: node,
+                            end: other,
+                            dist,
+                            colorSimilarity
+                        });
+                    }
+                });
+            });
+            
+            // Sort by distance and take top candidates
+            nodePairs.sort((a, b) => b.dist - a.dist);
+            const maxArcs = Math.floor(3 + audio.energy * 4);
+            nodePairs.slice(0, maxArcs).forEach(pair => {
+                state.lightningArcs.push(
+                    createLightningArc(
+                        pair.start,
+                        pair.end,
+                        pair.start.color,
+                        audio.energy
+                    )
+                );
+            });
+        }
+
+        // Dynamic base repulsion force
+        const baseRepulsion = -2000 - (audio.energy * 800); // Increased base repulsion
+        
+        state.nodes.forEach(node => {
+            const prevX = node.x;
+            const prevY = node.y;
+            
+            if (now - node.lastUpdate < 16) return;
+            node.lastUpdate = now;
+
+            // Apply music-reactive forces with reduced damping
+            node.vx *= 0.98 - (audio.energy * 0.02); // Less damping
+            node.vy *= 0.98 - (audio.energy * 0.02);
+
+            // Enhanced node interactions with stronger repulsion
+            state.nodes.forEach(other => {
+                if (node === other) return;
+                const dx = other.x - node.x;
+                const dy = other.y - node.y;
+                const dist = safeDistance(dx, dy);
+                
+                const colorSimilarity = getColorSimilarity(node.hue, other.hue);
+                const sameCluster = node.clusterId === other.clusterId;
+                
+                // Adjusted clustering forces
+                const musicClusterEffect = 1 + (audio.energy * 1.5); // Reduced music effect
+                const clusterMultiplier = sameCluster ?
+                    (0.3 + (colorSimilarity * 1.2)) * musicClusterEffect : // Reduced attraction
+                    (2.5 + ((1 - colorSimilarity) * 1.8)) / musicClusterEffect; // Increased repulsion
+                
+                // Apply repulsion force with distance-based scaling
+                const distanceScale = Math.max(0.1, Math.min(1, dist / 400)); // Gradual force falloff
+                const force = safeDivide(baseRepulsion * clusterMultiplier * distanceScale, dist * dist);
+                node.vx += safeDivide(dx * force, dist) * 0.4; // Increased force application
+                node.vy += safeDivide(dy * force, dist) * 0.4;
+            });
+
+            // Enhanced cluster center attraction with more spacing
+            if (state.clusterCenters.length > 0 && node.clusterId >= 0) {
+                const center = state.clusterCenters[node.clusterId];
+                if (center) {
+                    const dx = center.x - node.x;
+                    const dy = center.y - node.y;
+                    const dist = safeDistance(dx, dy);
+                    
+                    // Reduced cluster cohesion
+                    const clusterForce = 0.02 * // Halved attraction force
+                        state.transitionProgress * 
+                        (0.3 + (node.colorSimilarity || 0)) * 
+                        Math.sin(state.clusterPhase * Math.PI) *
+                        (1 + audio.energy * 0.5); // Reduced music influence
+                    
+                    // Larger cluster radius
+                    const clusterRadius = (center.radius || 300) * (1 + audio.energy * 0.3);
+                    const radiusForce = dist > clusterRadius ? 0.015 : -0.01; // Added slight repulsion inside radius
+                    
+                    // Spiral effect on beats
+                    const spiralAngle = Math.atan2(dy, dx);
+                    const spiralForce = audio.isBeat ? 0.08 * audio.energy : 0;
+                    node.vx += dx * (clusterForce + radiusForce) + Math.cos(spiralAngle + Math.PI/2) * spiralForce;
+                    node.vy += dy * (clusterForce + radiusForce) + Math.sin(spiralAngle + Math.PI/2) * spiralForce;
+                }
+            }
+
+            // Reduced center force
+            const centerMultiplier = state.clusterCenters.length > 1 ? 
+                0.15 * (1 - state.transitionProgress) * (1 + audio.energy) : 0.5; // Halved center force
+            node.vx += -node.x * 0.001 * centerMultiplier; // Reduced base center force
+            node.vy += -node.y * 0.001 * centerMultiplier;
+
+            // Pulse effect on beats
+            if (audio.isBeat) {
+                const distFromCenter = Math.sqrt(node.x * node.x + node.y * node.y);
+                const pulseForce = 0.5 * Math.sin(distFromCenter / 50);
+                node.vx += node.x * pulseForce * audio.energy;
+                node.vy += node.y * pulseForce * audio.energy;
+            }
+
+            // Dynamic velocity limits based on music energy
+            const maxVelocity = 10 + (audio.energy * 15);
+            node.vx = Math.max(-maxVelocity, Math.min(maxVelocity, node.vx));
+            node.vy = Math.max(-maxVelocity, Math.min(maxVelocity, node.vy));
+
+            // Frequency-based oscillation
+            const oscillation = Math.sin(now / 1000 + node.hue / 30) * audioLevels.midLevel * 2;
+            node.vx += oscillation;
+            node.vy += oscillation;
+
+            // Update position
+            node.x += node.vx;
+            node.y += node.vy;
+
+            // Expanded boundaries
+            const padding = 100 * (1 + audio.energy * 0.3); // Doubled padding
+            const maxX = (window.innerWidth / 2) - padding;
+            const maxY = (window.innerHeight / 2) - padding;
+
+            if (Math.abs(node.x) > maxX) {
+                const excess = Math.abs(node.x) - maxX;
+                node.vx -= Math.sign(node.x) * excess * (0.15 + audio.energy * 0.15); // Gentler boundary force
+                node.x = Math.sign(node.x) * maxX;
+            }
+
+            if (Math.abs(node.y) > maxY) {
+                const excess = Math.abs(node.y) - maxY;
+                node.vy -= Math.sign(node.y) * excess * (0.15 + audio.energy * 0.15);
+                node.y = Math.sign(node.y) * maxY;
+            }
+
+            // Add trail for fast-moving nodes
+            const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+            if (speed > 15 || (audio.isBeat && speed > 8)) {
+                state.nodeTrails.push({
+                    x1: prevX,
+                    y1: prevY,
+                    x2: node.x,
+                    y2: node.y,
+                    color: node.color,
+                    timestamp: now,
+                    intensity: Math.min(1, speed / 20)
+                });
+            }
         });
 
-        // Center force
-        node.vx += -node.x * centerForce;
-        node.vy += -node.y * centerForce;
-
-        // Audio-reactive jitter
-        node.vx += (Math.random() - 0.5) * trebleLevel * 10;
-        node.vy += (Math.random() - 0.5) * trebleLevel * 10;
-    });
-
-    // Update positions
-    state.nodes.forEach(node => {
-        node.x += node.vx;
-        node.y += node.vy;
-
-        // Boundary constraints
-        const dist = Math.sqrt(node.x * node.x + node.y * node.y);
-        if (dist > bounds) {
-            node.x = (node.x / dist) * bounds;
-            node.y = (node.y / dist) * bounds;
-        }
-    });
+        // Return effects for visualization
+        return {
+            trails: state.nodeTrails.map(trail => ({
+                ...trail,
+                opacity: Math.max(0, 1 - (now - trail.timestamp) / 500)
+            })),
+            lightningArcs: state.lightningArcs.map(arc => ({
+                ...arc,
+                opacity: Math.max(0, 1 - (now - arc.timestamp) / arc.duration)
+            }))
+        };
+    } catch (error) {
+        console.error('Error updating node positions:', error);
+        state.isUpdating = false;
+    }
 }
 
 // Export state and functions

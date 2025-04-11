@@ -77,20 +77,32 @@ export function createNodeSprite(color) {
         }
 
         if (state.isClassicMode) {
-            // Classic mode: Simple dot with glow
-            const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-            gradient.addColorStop(0, color);
-            gradient.addColorStop(0.3, color);
-            gradient.addColorStop(0.5, color.replace(')', ', 0.5)'));
-            gradient.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 256, 256);
-        } else {
-            // Fluid mode: Larger, more diffuse glow
+            // Classic mode: Enhanced dot with stronger glow
             const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
             gradient.addColorStop(0, color);
             gradient.addColorStop(0.2, color);
-            gradient.addColorStop(0.4, color.replace(')', ', 0.5)'));
+            gradient.addColorStop(0.4, color);
+            gradient.addColorStop(0.6, color.replace(')', ', 0.7)'));
+            gradient.addColorStop(0.8, color.replace(')', ', 0.3)'));
+            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Add central bright spot for extra pop
+            const centerGlow = ctx.createRadialGradient(128, 128, 0, 128, 128, 30);
+            centerGlow.addColorStop(0, '#ffffff');
+            centerGlow.addColorStop(0.5, color.replace(')', ', 0.8)'));
+            centerGlow.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = centerGlow;
+            ctx.fillRect(0, 0, 256, 256);
+        } else {
+            // Fluid mode: Larger, more diffuse glow with enhanced brightness
+            const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+            gradient.addColorStop(0, '#ffffff');
+            gradient.addColorStop(0.2, color);
+            gradient.addColorStop(0.4, color);
+            gradient.addColorStop(0.6, color.replace(')', ', 0.6)'));
+            gradient.addColorStop(0.8, color.replace(')', ', 0.3)'));
             gradient.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, 256, 256);
@@ -157,6 +169,135 @@ function onWindowResize() {
     if (state.renderer) {
         state.renderer.setSize(viewport.width, viewport.height);
     }
+}
+
+// Create trail material for shooting star effect
+function createTrailMaterial(color, opacity = 1) {
+    return new THREE.LineDashedMaterial({
+        color: color,
+        opacity: opacity,
+        transparent: true,
+        linewidth: 2,
+        scale: 1,
+        dashSize: 3,
+        gapSize: 1
+    });
+}
+
+// Create lightning material
+function createLightningMaterial(color, opacity = 1) {
+    return new THREE.LineBasicMaterial({
+        color: color,
+        opacity: opacity,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+    });
+}
+
+// Update scene with new trails
+export function updateTrails(trails) {
+    // Remove old trails
+    state.scene.children = state.scene.children.filter(child => !child.isTrail);
+    
+    // Add new trails
+    trails.forEach(trail => {
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array([
+            trail.x1, trail.y1, 0,
+            trail.x2, trail.y2, 0
+        ]);
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        
+        // Create main trail
+        const trailLine = new THREE.Line(
+            geometry,
+            createTrailMaterial(trail.color, trail.opacity * trail.intensity)
+        );
+        trailLine.isTrail = true;
+        state.scene.add(trailLine);
+        
+        // Create glow effect
+        const glowLine = new THREE.Line(
+            geometry.clone(),
+            createTrailMaterial(trail.color, trail.opacity * trail.intensity * 0.5)
+        );
+        glowLine.material.linewidth = 4;
+        glowLine.isTrail = true;
+        state.scene.add(glowLine);
+    });
+}
+
+// Update scene with new effects
+export function updateEffects(effects) {
+    // Remove old effects
+    state.scene.children = state.scene.children.filter(child => !child.isEffect);
+    
+    // Add new trails
+    if (effects.trails) {
+        effects.trails.forEach(trail => {
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array([
+                trail.x1, trail.y1, 0,
+                trail.x2, trail.y2, 0
+            ]);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const trailLine = new THREE.Line(
+                geometry,
+                createTrailMaterial(trail.color, trail.opacity * trail.intensity)
+            );
+            trailLine.isEffect = true;
+            state.scene.add(trailLine);
+        });
+    }
+    
+    // Add new lightning arcs
+    if (effects.lightningArcs) {
+        effects.lightningArcs.forEach(arc => {
+            // Create main lightning stroke
+            const positions = new Float32Array(arc.points.length * 3);
+            arc.points.forEach((point, i) => {
+                positions[i * 3] = point.x;
+                positions[i * 3 + 1] = point.y;
+                positions[i * 3 + 2] = 0;
+            });
+            
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            // Create multiple layers for glow effect
+            [1, 0.7, 0.4].forEach((intensity, i) => {
+                const material = createLightningMaterial(
+                    arc.color,
+                    arc.opacity * intensity * arc.intensity
+                );
+                const line = new THREE.Line(geometry, material);
+                line.isEffect = true;
+                
+                // Scale each layer slightly
+                line.scale.set(1 + i * 0.2, 1 + i * 0.2, 1);
+                state.scene.add(line);
+            });
+        });
+    }
+}
+
+// Update animation loop to include effects
+export function animate() {
+    requestAnimationFrame(animate);
+    
+    const audioLevels = getAudioLevels();
+    const updates = updateNodePositions(audioLevels);
+    
+    if (updates) {
+        if (updates.trails || updates.lightningArcs) {
+            updateEffects(updates);
+        }
+        // ... rest of existing animation code ...
+    }
+    
+    state.renderer.render(state.scene, state.camera);
 }
 
 // Export state for access from other modules
