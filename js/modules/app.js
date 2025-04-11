@@ -7,7 +7,12 @@ const state = {
     isDebugMode: false,
     stats: null,
     animationFrame: null,
-    initialized: false
+    initialized: false,
+    lastAudioState: null // Track audio state changes
+};
+
+const _audioState = {
+    // ... audio state properties ...
 };
 
 // Initialize debug stats
@@ -30,10 +35,29 @@ function animate() {
         state.stats.begin();
     }
 
-    // Get audio levels
+    // Get audio levels and check for state changes
     const audioLevels = getAudioLevels();
+    const currentAudioState = {
+        isMicrophoneActive: audioState.isMicrophoneActive,
+        isMusicPlaying: audioState.isMusicPlaying
+    };
 
-    // Update node positions
+    // Handle audio source changes
+    if (JSON.stringify(currentAudioState) !== JSON.stringify(state.lastAudioState)) {
+        console.log('Audio state changed:', currentAudioState);
+        state.lastAudioState = currentAudioState;
+        
+        // Adjust visualization parameters based on audio source
+        if (currentAudioState.isMicrophoneActive) {
+            // Enhance sensitivity for microphone input
+            graphState.nodes.forEach(node => {
+                node.vx *= 0.5;
+                node.vy *= 0.5;
+            });
+        }
+    }
+
+    // Update node positions with audio state context
     updateNodePositions(audioLevels);
 
     // Update node sprites and edge lines

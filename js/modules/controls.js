@@ -7,11 +7,38 @@ const state = {
     controlsVisible: true
 };
 
-// Initialize UI controls
-export function initControls() {
+// Initialize UI controls with proper mode handling
+export function initializeControls(initialClassicMode) {
+    // Set initial mode indicator
+    const modeIndicator = document.querySelector('.mode-indicator');
+    if (modeIndicator) {
+        modeIndicator.textContent = `Mode: ${initialClassicMode ? 'Classic' : 'Fluid'}`;
+    }
+
+    // Initialize controls visibility
     const topControls = document.querySelectorAll('.controls, .audio-controls, .microphone-control');
     const bottomControls = document.querySelectorAll('.node-count-container');
-    const modeIndicator = document.querySelector('.mode-indicator');
+
+    // Update control styles based on mode
+    function updateControlStyles(isClassic) {
+        const controls = [...topControls, ...bottomControls];
+        controls.forEach(control => {
+            control.classList.toggle('classic-mode', isClassic);
+            control.classList.toggle('fluid-mode', !isClassic);
+        });
+    }
+
+    // Initial style update
+    updateControlStyles(initialClassicMode);
+
+    // Add mode change listener
+    document.addEventListener('keydown', event => {
+        if (event.code === 'Space' && !event.repeat) {
+            event.preventDefault();
+            const newMode = toggleMode();
+            updateControlStyles(newMode);
+        }
+    });
 
     // Show/hide controls functions
     function showControls() {
@@ -46,14 +73,6 @@ export function initControls() {
         element.addEventListener('mouseleave', () => {
             state.controlsTimeout = setTimeout(hideControls, 3000);
         });
-    });
-
-    // Space bar handler for mode switching
-    document.addEventListener('keydown', (event) => {
-        if (event.code === 'Space' && !event.repeat) {
-            event.preventDefault();
-            handleModeSwitch();
-        }
     });
 
     // Initialize with hidden controls

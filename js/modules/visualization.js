@@ -1,3 +1,6 @@
+import { getAudioLevels } from './audio.js';
+import { updateNodePositions } from './graph.js';
+
 // Core visualization state
 const state = {
     isClassicMode: true,
@@ -34,7 +37,7 @@ export function initVisualization() {
     state.renderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: true,
-        powerPreference: "high-performance"
+        powerPreference: 'high-performance'
     });
     
     state.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -68,52 +71,43 @@ export function toggleMode() {
 export function createNodeSprite(color) {
     try {
         const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
+        canvas.width = 128;
+        canvas.height = 128;
         const ctx = canvas.getContext('2d');
         
-        if (!ctx) {
-            throw new Error('Could not get 2D context');
-        }
-
-        // Create base glow
-        const baseGlow = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-        baseGlow.addColorStop(0, '#ffffff');
-        baseGlow.addColorStop(0.2, color);
-        baseGlow.addColorStop(0.4, color);
-        baseGlow.addColorStop(0.6, color.replace(')', ', 0.8)'));
-        baseGlow.addColorStop(0.8, color.replace(')', ', 0.4)'));
-        baseGlow.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = baseGlow;
-        ctx.fillRect(0, 0, 256, 256);
-
-        // Add intense core
-        const coreGlow = ctx.createRadialGradient(128, 128, 0, 128, 128, 40);
-        coreGlow.addColorStop(0, '#ffffff');
-        coreGlow.addColorStop(0.4, color.replace(')', ', 0.9)'));
-        coreGlow.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = coreGlow;
-        ctx.fillRect(0, 0, 256, 256);
-
-        // Add outer ethereal glow
-        const outerGlow = ctx.createRadialGradient(128, 128, 60, 128, 128, 128);
-        outerGlow.addColorStop(0, 'rgba(255,255,255,0)');
-        outerGlow.addColorStop(0.5, color.replace(')', ', 0.2)'));
-        outerGlow.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = outerGlow;
-        ctx.fillRect(0, 0, 256, 256);
-
-        // Add sparkle effect
-        const sparkleSize = 20;
-        const sparkleOpacity = 0.4;
-        ctx.fillStyle = `rgba(255,255,255,${sparkleOpacity})`;
-        ctx.beginPath();
-        ctx.moveTo(128, 128 - sparkleSize);
-        ctx.lineTo(128 + sparkleSize/3, 128);
-        ctx.lineTo(128, 128 + sparkleSize);
-        ctx.lineTo(128 - sparkleSize/3, 128);
-        ctx.closePath();
-        ctx.fill();
+        // Create gradient for enhanced glow
+        const gradient = ctx.createRadialGradient(64, 64, 1, 64, 64, 64);
+        
+        // Bright core
+        gradient.addColorStop(0, '#ffffff');
+        
+        // Parse the color to get its components
+        const tempDiv = document.createElement('div');
+        tempDiv.style.color = color;
+        document.body.appendChild(tempDiv);
+        const rgbColor = window.getComputedStyle(tempDiv).color;
+        document.body.removeChild(tempDiv);
+        
+        // Enhanced middle glow
+        gradient.addColorStop(0.1, color);
+        gradient.addColorStop(0.2, color.replace(')', ', 0.8)'));
+        
+        // Outer glow with multiple color stops
+        gradient.addColorStop(0.4, color.replace(')', ', 0.4)'));
+        gradient.addColorStop(0.6, color.replace(')', ', 0.2)'));
+        gradient.addColorStop(0.8, color.replace(')', ', 0.1)'));
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+        
+        // Draw the enhanced glow
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 128, 128);
+        
+        // Add a bright center highlight
+        const highlightGradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 8);
+        highlightGradient.addColorStop(0, '#ffffff');
+        highlightGradient.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = highlightGradient;
+        ctx.fillRect(0, 0, 128, 128);
 
         const texture = new THREE.Texture(canvas);
         texture.needsUpdate = true;
@@ -125,7 +119,15 @@ export function createNodeSprite(color) {
             depthTest: false
         });
         
-        return new THREE.Sprite(material);
+        const sprite = new THREE.Sprite(material);
+        
+        // Store the original color for audio reactivity
+        sprite.userData = {
+            originalScale: sprite.scale.clone(),
+            color: color
+        };
+        
+        return sprite;
     } catch (error) {
         console.error('Error creating node sprite:', error);
         throw error;
@@ -294,19 +296,62 @@ export function updateEffects(effects) {
 
 // Update animation loop to include effects
 export function animate() {
-    requestAnimationFrame(animate);
-    
-    const audioLevels = getAudioLevels();
-    const updates = updateNodePositions(audioLevels);
-    
-    if (updates) {
-        if (updates.trails || updates.lightningArcs) {
+    try {
+        requestAnimationFrame(animate);
+        
+        const audioLevels = getAudioLevels();
+        const updates = updateNodePositions(audioLevels);
+        
+        // Update node positions in visualization
+        if (state.nodeSprites && state.nodeSprites.length > 0) {
+            state.nodeSprites.forEach((sprite, i) => {
+                if (visualizationState.graph.nodes[i]) {
+                    const node = visualizationState.graph.nodes[i];
+                    sprite.position.set(node.x, node.y, 0);
+                    
+                    // Update sprite scale based on audio energy
+                    const scale = sprite.userData.originalScale.clone();
+                    const energyScale = 1 + (audioLevels.bassLevel * 0.3);
+                    sprite.scale.copy(scale.multiplyScalar(energyScale));
+                }
+            });
+        }
+        
+        // Update edge positions
+        if (state.edgeLines && state.edgeLines.length > 0) {
+            state.edgeLines.forEach((line, i) => {
+                const edgeIndex = Math.floor(i / 2);
+                if (visualizationState.graph.edges[edgeIndex]) {
+                    const edge = visualizationState.graph.edges[edgeIndex];
+                    const source = visualizationState.graph.nodes[edge.source];
+                    const target = visualizationState.graph.nodes[edge.target];
+                    
+                    if (source && target) {
+                        const positions = line.geometry.attributes.position.array;
+                        positions[0] = source.x;
+                        positions[1] = source.y;
+                        positions[3] = target.x;
+                        positions[4] = target.y;
+                        line.geometry.attributes.position.needsUpdate = true;
+                    }
+                }
+            });
+        }
+        
+        // Update visual effects
+        if (updates && (updates.trails || updates.lightningArcs)) {
             updateEffects(updates);
         }
-        // ... rest of existing animation code ...
+        
+        // Render the scene
+        if (state.renderer && state.scene && state.camera) {
+            state.renderer.render(state.scene, state.camera);
+        }
+        
+    } catch (error) {
+        console.error('Animation loop error:', error);
+        // Don't stop the animation loop on error
     }
-    
-    state.renderer.render(state.scene, state.camera);
 }
 
 // Export state for access from other modules
