@@ -31,7 +31,7 @@ canvas {
   position: fixed;
   top: 20px;
   left: 20px;
-  font-family: 'Orbitron', sans-serif;
+  font-family: Orbitron, sans-serif;
   color: #fff;
   z-index: 10;
   display: flex;
@@ -44,13 +44,13 @@ canvas {
 
 .controls button {
   padding: 10px 15px;
-  background: rgba(255, 215, 0, 0.2);
+  background: rgb(255 215 0 / 20%);
   border: 1px solid #ffd700;
   border-radius: 5px;
   color: #ffd700;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-family: 'Orbitron', sans-serif;
+  font-family: Orbitron, sans-serif;
 }
 
 .controls button:hover,
@@ -71,13 +71,13 @@ canvas {
 }
 
 .audio-controls button {
-  background: rgba(255, 215, 0, 0.2);
+  background: rgb(255 215 0 / 20%);
   border: 1px solid #ffd700;
   color: #ffd700;
   padding: 10px;
   cursor: pointer;
   border-radius: 5px;
-  font-family: 'Orbitron', sans-serif;
+  font-family: Orbitron, sans-serif;
 }
 
 .audio-controls button:hover {
@@ -110,12 +110,12 @@ canvas {
 
 .node-count-container input {
   width: 60px;
-  background: rgba(255, 215, 0, 0.2);
+  background: rgb(255 215 0 / 20%);
   border: 1px solid #ffd700;
   color: #ffd700;
   padding: 8px;
   border-radius: 5px;
-  font-family: 'Orbitron', sans-serif;
+  font-family: Orbitron, sans-serif;
   font-size: 16px;
   text-align: center;
 }
@@ -123,7 +123,7 @@ canvas {
 .node-count-container input:focus {
   outline: none;
   border-color: #fff;
-  background: rgba(255, 215, 0, 0.3);
+  background: rgb(255 215 0 / 30%);
 }
 
 .node-count-container .label {
@@ -154,13 +154,13 @@ canvas {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  font-family: 'Orbitron', sans-serif;
+  font-family: Orbitron, sans-serif;
   color: #ffd700;
   opacity: 0;
   transition: opacity 0.5s ease;
   z-index: 10;
   text-align: right;
-  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  text-shadow: 0 0 10px rgb(255 215 0 / 50%);
 }
 
 .mode-indicator.visible {
@@ -174,7 +174,7 @@ canvas {
   color: #ffd700;
   font-family: monospace;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgb(0 0 0 / 70%);
   padding: 10px;
   border-radius: 5px;
   display: none;

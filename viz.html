@@ -1,239 +1,248 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>CometBFT Visualizer</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-      background-color: #222;
-      color: #fff;
-    }
-    #visualizer-container {
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      height: 100vh;
-    }
-    #consensus-visualizer, #network-visualizer {
-      width: 45%;
-      height: 80%;
-      border: 2px solid #fff;
-      border-radius: 10px;
-      position: relative;
-    }
-    #overlay {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-    }
-    #api-key-input, #network-select {
-      margin-bottom: 10px;
-      padding: 5px;
-      width: 300px;
-      border: none;
-      border-radius: 5px;
-    }
-    #connect-button {
-      padding: 5px 10px;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    #block-info {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      text-align: center;
-    }
-  </style>
-</head>
-<body>
-  <div id="overlay">
-    <input type="text" id="api-key-input" placeholder="Enter NotionalAPI Key" />
-    <select id="network-select">
-      <option value="osmosis">Osmosis</option>
-      <option value="cosmoshub">Cosmos Hub</option>
-      <option value="akash">Akash</option>
-      <option value="evmos">Evmos</option>
-      <option value="quicksilver">Quicksilver</option>
-    </select>
-    <button id="connect-button">Connect</button>
-  </div>
-  <div id="visualizer-container">
-    <div id="consensus-visualizer">
-      <canvas id="consensus-canvas"></canvas>
-      <div id="block-info"></div>
-    </div>
-    <div id="network-visualizer">
-      <canvas id="network-canvas"></canvas>
-    </div>
-  </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.5.0/chart.min.js"></script>
-
-  <script>
-    const consensusCanvas = document.getElementById('consensus-canvas');
-    const networkCanvas = document.getElementById('network-canvas');
-    const blockInfo = document.getElementById('block-info');
-    const apiKeyInput = document.getElementById('api-key-input');
-    const networkSelect = document.getElementById('network-select');
-    const connectButton = document.getElementById('connect-button');
-
-    let wsClient;
-    let consensusState = 0;
-    let blockHeight = 0;
-    let blockSize = 0;
-    let networkNodes = [];
-    let networkLinks = [];
-
-    function connect() {
-      const apiKey = apiKeyInput.value;
-      const nodeName = networkSelect.value;
-      const rpcEndpoint = `https://r-${nodeName}--${apiKey}.gw.notionalapi.net`;
-      const wsEndpoint = `wss://r-${nodeName}--${apiKey}.gw.notionalapi.net/websocket`;
-
-      wsClient = new WebSocket(wsEndpoint);
-
-      wsClient.onopen = () => {
-        console.log('Connected to WebSocket');
-        wsClient.send(JSON.stringify({ jsonrpc: '2.0', method: 'subscribe', params: ['newBlock'], id: 1 }));
-      };
-
-      wsClient.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.result) {
-          if (data.result.block) {
-            blockHeight = data.result.block.header.height;
-            blockSize = data.result.block.size;
-          }
-        }
-      };
-
-      wsClient.onclose = () => {
-        console.log('WebSocket disconnected');
-      };
-
-      fetch(`${rpcEndpoint}/net_info`)
-        .then(response => response.json())
-        .then(data => {
-          if (data.result) {
-            networkNodes = data.result.peers.map(peer => ({
-              id: peer.node_info.id,
-              moniker: peer.node_info.moniker,
-              listenAddr: peer.node_info.listen_addr
-            }));
-            networkLinks = data.result.peers.map(peer => ({
-              source: data.result.peers[0].node_info.id,
-              target: peer.node_info.id
-            }));
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching network info:', error);
-        });
-    }
-
-    function updateVisualizerState() {
-      consensusState += 0.01;
-      if (consensusState > 1) {
-        consensusState = 0;
+  <head>
+    <title>CometBFT Visualizer</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+        background-color: #222;
+        color: #fff;
       }
-    }
+      #visualizer-container {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        height: 100vh;
+      }
+      #consensus-visualizer,
+      #network-visualizer {
+        width: 45%;
+        height: 80%;
+        border: 2px solid #fff;
+        border-radius: 10px;
+        position: relative;
+      }
+      #overlay {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+      }
+      #api-key-input,
+      #network-select {
+        margin-bottom: 10px;
+        padding: 5px;
+        width: 300px;
+        border: none;
+        border-radius: 5px;
+      }
+      #connect-button {
+        padding: 5px 10px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      #block-info {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="overlay">
+      <input type="text" id="api-key-input" placeholder="Enter NotionalAPI Key" />
+      <select id="network-select">
+        <option value="osmosis">Osmosis</option>
+        <option value="cosmoshub">Cosmos Hub</option>
+        <option value="akash">Akash</option>
+        <option value="evmos">Evmos</option>
+        <option value="quicksilver">Quicksilver</option>
+      </select>
+      <button id="connect-button">Connect</button>
+    </div>
+    <div id="visualizer-container">
+      <div id="consensus-visualizer">
+        <canvas id="consensus-canvas"></canvas>
+        <div id="block-info"></div>
+      </div>
+      <div id="network-visualizer">
+        <canvas id="network-canvas"></canvas>
+      </div>
+    </div>
 
-    function renderConsensusVisualizer() {
-      consensusCanvas.width = consensusCanvas.clientWidth;
-      consensusCanvas.height = consensusCanvas.clientHeight;
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.5.0/chart.min.js"></script>
 
-      const ctx = consensusCanvas.getContext('2d');
-      const centerX = consensusCanvas.width / 2;
-      const centerY = consensusCanvas.height / 2;
-      const radius = Math.min(centerX, centerY) * 0.8;
+    <script>
+      const consensusCanvas = document.getElementById('consensus-canvas');
+      const networkCanvas = document.getElementById('network-canvas');
+      const blockInfo = document.getElementById('block-info');
+      const apiKeyInput = document.getElementById('api-key-input');
+      const networkSelect = document.getElementById('network-select');
+      const connectButton = document.getElementById('connect-button');
 
-      // Clear canvas
-      ctx.clearRect(0, 0, consensusCanvas.width, consensusCanvas.height);
+      let wsClient;
+      let consensusState = 0;
+      let blockHeight = 0;
+      let blockSize = 0;
+      let networkNodes = [];
+      let networkLinks = [];
 
-      // Draw consensus state pie chart
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radius, -Math.PI / 2, consensusState * Math.PI * 2 - Math.PI / 2);
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
-      ctx.fill();
-      ctx.strokeStyle = 'white';
-      ctx.stroke();
+      function connect() {
+        const apiKey = apiKeyInput.value;
+        const nodeName = networkSelect.value;
+        const rpcEndpoint = `https://r-${nodeName}--${apiKey}.gw.notionalapi.net`;
+        const wsEndpoint = `wss://r-${nodeName}--${apiKey}.gw.notionalapi.net/websocket`;
 
-      // Draw 2/3 marker
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radius, -Math.PI / 2, Math.PI / 3 - Math.PI / 2);
-      ctx.strokeStyle = 'white';
-      ctx.stroke();
+        wsClient = new WebSocket(wsEndpoint);
 
-      // Update block info
-      blockInfo.textContent = `Block Height: ${blockHeight}, Block Size: ${blockSize} bytes`;
-    }
+        wsClient.onopen = () => {
+          console.log('Connected to WebSocket');
+          wsClient.send(
+            JSON.stringify({ jsonrpc: '2.0', method: 'subscribe', params: ['newBlock'], id: 1 })
+          );
+        };
 
-    function renderNetworkVisualizer() {
-      networkCanvas.width = networkCanvas.clientWidth;
-      networkCanvas.height = networkCanvas.clientHeight;
+        wsClient.onmessage = event => {
+          const data = JSON.parse(event.data);
+          if (data.result) {
+            if (data.result.block) {
+              blockHeight = data.result.block.header.height;
+              blockSize = data.result.block.size;
+            }
+          }
+        };
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(75, networkCanvas.width / networkCanvas.height, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer({ canvas: networkCanvas, antialias: true });
-      renderer.setSize(networkCanvas.width, networkCanvas.height);
+        wsClient.onclose = () => {
+          console.log('WebSocket disconnected');
+        };
 
-      const nodeGeometry = new THREE.SphereGeometry(1, 32, 32);
-      const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      const nodes = networkNodes.map(node => {
-        const mesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
-        mesh.position.x = Math.random() * 20 - 10;
-        mesh.position.y = Math.random() * 20 - 10;
-        mesh.position.z = Math.random() * 20 - 10;
-        scene.add(mesh);
-        return mesh;
-      });
+        fetch(`${rpcEndpoint}/net_info`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.result) {
+              networkNodes = data.result.peers.map(peer => ({
+                id: peer.node_info.id,
+                moniker: peer.node_info.moniker,
+                listenAddr: peer.node_info.listen_addr,
+              }));
+              networkLinks = data.result.peers.map(peer => ({
+                source: data.result.peers[0].node_info.id,
+                target: peer.node_info.id,
+              }));
+            }
+          })
+          .catch(error => {
+            console.error('Error fetching network info:', error);
+          });
+      }
 
-      const linkMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-      const links = networkLinks.map(link => {
-        const sourceNode = nodes.find(node => node.id === link.source);
-        const targetNode = nodes.find(node => node.id === link.target);
-        const geometry = new THREE.BufferGeometry().setFromPoints([
-          sourceNode.position,
-          targetNode.position
-        ]);
-        const line = new THREE.Line(geometry, linkMaterial);
-        scene.add(line);
-        return line;
-      });
+      function updateVisualizerState() {
+        consensusState += 0.01;
+        if (consensusState > 1) {
+          consensusState = 0;
+        }
+      }
 
-      camera.position.z = 30;
+      function renderConsensusVisualizer() {
+        consensusCanvas.width = consensusCanvas.clientWidth;
+        consensusCanvas.height = consensusCanvas.clientHeight;
 
-      const animate = () => {
-        requestAnimationFrame(animate);
-        nodes.forEach(node => {
-          node.rotation.x += 0.01;
-          node.rotation.y += 0.01;
+        const ctx = consensusCanvas.getContext('2d');
+        const centerX = consensusCanvas.width / 2;
+        const centerY = consensusCanvas.height / 2;
+        const radius = Math.min(centerX, centerY) * 0.8;
+
+        // Clear canvas
+        ctx.clearRect(0, 0, consensusCanvas.width, consensusCanvas.height);
+
+        // Draw consensus state pie chart
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, -Math.PI / 2, consensusState * Math.PI * 2 - Math.PI / 2);
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.stroke();
+
+        // Draw 2/3 marker
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, -Math.PI / 2, Math.PI / 3 - Math.PI / 2);
+        ctx.strokeStyle = 'white';
+        ctx.stroke();
+
+        // Update block info
+        blockInfo.textContent = `Block Height: ${blockHeight}, Block Size: ${blockSize} bytes`;
+      }
+
+      function renderNetworkVisualizer() {
+        networkCanvas.width = networkCanvas.clientWidth;
+        networkCanvas.height = networkCanvas.clientHeight;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(
+          75,
+          networkCanvas.width / networkCanvas.height,
+          0.1,
+          1000
+        );
+        const renderer = new THREE.WebGLRenderer({ canvas: networkCanvas, antialias: true });
+        renderer.setSize(networkCanvas.width, networkCanvas.height);
+
+        const nodeGeometry = new THREE.SphereGeometry(1, 32, 32);
+        const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const nodes = networkNodes.map(node => {
+          const mesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
+          mesh.position.x = Math.random() * 20 - 10;
+          mesh.position.y = Math.random() * 20 - 10;
+          mesh.position.z = Math.random() * 20 - 10;
+          scene.add(mesh);
+          return mesh;
         });
-        renderer.render(scene, camera);
-      };
 
+        const linkMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+        const links = networkLinks.map(link => {
+          const sourceNode = nodes.find(node => node.id === link.source);
+          const targetNode = nodes.find(node => node.id === link.target);
+          const geometry = new THREE.BufferGeometry().setFromPoints([
+            sourceNode.position,
+            targetNode.position,
+          ]);
+          const line = new THREE.Line(geometry, linkMaterial);
+          scene.add(line);
+          return line;
+        });
+
+        camera.position.z = 30;
+
+        const animate = () => {
+          requestAnimationFrame(animate);
+          nodes.forEach(node => {
+            node.rotation.x += 0.01;
+            node.rotation.y += 0.01;
+          });
+          renderer.render(scene, camera);
+        };
+
+        animate();
+      }
+
+      function animate() {
+        updateVisualizerState();
+        renderConsensusVisualizer();
+        renderNetworkVisualizer();
+        requestAnimationFrame(animate);
+      }
+
+      connectButton.addEventListener('click', connect);
       animate();
-    }
-
-    function animate() {
-      updateVisualizerState();
-      renderConsensusVisualizer();
-      renderNetworkVisualizer();
-      requestAnimationFrame(animate);
-    }
-
-    connectButton.addEventListener('click', connect);
-    animate();
-  </script>
-</body>
+    </script>
+  </body>
 </html>

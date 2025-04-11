@@ -1,88 +1,95 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>K50 Visualization</title>
-    <link rel="stylesheet" href="css/styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet" />
     <!-- Load dependencies in head to ensure they're available before our modules -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://raw.githubusercontent.com/mrdoob/stats.js/master/build/stats.min.js"></script>
-</head>
-<body>
+  </head>
+  <body>
     <div class="controls">
-        <button onclick="window.K50.toggleDebug()">Debug</button>
+      <button onclick="window.K50.toggleDebug()">Debug</button>
     </div>
     <div class="audio-controls">
-        <button onclick="window.K50.toggleMusic()">Toggle Music</button>
+      <button onclick="window.K50.toggleMusic()">Toggle Music</button>
     </div>
     <div class="microphone-control">
-        <button onclick="window.K50.handleMicrophoneToggle()">Toggle Microphone</button>
+      <button onclick="window.K50.handleMicrophoneToggle()">Toggle Microphone</button>
     </div>
     <div class="node-count-container sliding-element">
-        <div class="label" id="label">Kn = </div>
-        <input type="number" id="nodeCount" min="3" max="200" value="180" onchange="window.K50.handleNodeCountChange(this.value)">
+      <div class="label" id="label">Kn =</div>
+      <input
+        type="number"
+        id="nodeCount"
+        min="3"
+        max="200"
+        value="180"
+        onchange="window.K50.handleNodeCountChange(this.value)"
+      />
     </div>
     <div class="mode-indicator">Mode: Classic</div>
     <div id="debug"></div>
-    
+
     <!-- Initialize app -->
     <script>
-        // Load Stats.js manually since GitHub raw content doesn't work directly
-        function loadScript(url) {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = url;
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
+      // Load Stats.js manually since GitHub raw content doesn't work directly
+      function loadScript(url) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = url;
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
 
-        // Try multiple CDN sources for Stats.js
-        async function loadStats() {
-            const sources = [
-                'https://mrdoob.github.io/stats.js/build/stats.min.js',
-                'https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.js',
-                'https://raw.githack.com/mrdoob/stats.js/master/build/stats.min.js'
-            ];
+      // Try multiple CDN sources for Stats.js
+      async function loadStats() {
+        const sources = [
+          'https://mrdoob.github.io/stats.js/build/stats.min.js',
+          'https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.js',
+          'https://raw.githack.com/mrdoob/stats.js/master/build/stats.min.js',
+        ];
 
-            for (const source of sources) {
-                try {
-                    await loadScript(source);
-                    if (typeof Stats !== 'undefined') {
-                        console.log('Stats.js loaded successfully');
-                        return true;
-                    }
-                } catch (error) {
-                    console.warn(`Failed to load Stats.js from ${source}`);
-                }
+        for (const source of sources) {
+          try {
+            await loadScript(source);
+            if (typeof Stats !== 'undefined') {
+              console.log('Stats.js loaded successfully');
+              return true;
             }
-            return false;
+          } catch (error) {
+            console.warn(`Failed to load Stats.js from ${source}`);
+          }
         }
+        return false;
+      }
     </script>
 
     <script type="module">
-        import { initApp, toggleDebug, handleNodeCountChange } from './js/modules/app.js';
-        import { handleMicrophoneToggle, handleMusicToggle } from './js/modules/controls.js';
+      import { initApp, toggleDebug, handleNodeCountChange } from './js/modules/app.js';
+      import { handleMicrophoneToggle, handleMusicToggle } from './js/modules/controls.js';
 
-        // Create global namespace for the app
-        window.K50 = {
-            toggleDebug,
-            handleNodeCountChange,
-            handleMicrophoneToggle,
-            handleMusicToggle
-        };
+      // Create global namespace for the app
+      window.K50 = {
+        toggleDebug,
+        handleNodeCountChange,
+        handleMicrophoneToggle,
+        handleMusicToggle,
+      };
 
-        // Initialize the app when the window loads
-        window.addEventListener('load', () => {
-            try {
-                initApp();
-                } catch (error) {
-                console.error('Failed to initialize app:', error);
-            }
-        });
+      // Initialize the app when the window loads
+      window.addEventListener('load', () => {
+        try {
+          initApp();
+        } catch (error) {
+          console.error('Failed to initialize app:', error);
+        }
+      });
     </script>
-</body>
+  </body>
 </html>
