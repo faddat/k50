@@ -41,6 +41,7 @@
             display: flex;
             gap: 10px;
             flex-direction: column;
+            transition: transform 0.5s ease, opacity 0.5s ease;
         }
         .controls button {
             padding: 10px 15px;
@@ -85,6 +86,7 @@
             top: 20px;
             right: 20px;
             z-index: 10;
+            transition: transform 0.5s ease, opacity 0.5s ease;
         }
         .audio-controls button {
             background: rgba(255, 215, 0, 0.2);
@@ -101,9 +103,10 @@
         }
         .mode-switch {
             position: fixed;
-            top: 140px;
-            right: 20px;
+            top: 20px;
+            right: 100px;
             z-index: 10;
+            transition: transform 0.5s ease, opacity 0.5s ease;
         }
         .mode-switch button {
             background: rgba(255, 215, 0, 0.2);
@@ -118,6 +121,72 @@
             background: #ffd700;
             color: #0d041a;
         }
+        .microphone-control {
+            position: fixed;
+            top: 20px;
+            right: 250px;
+            z-index: 10;
+            transition: transform 0.5s ease, opacity 0.5s ease;
+        }
+        .node-count-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 10;
+            transition: transform 0.5s ease, opacity 0.5s ease;
+        }
+        .node-count-container input {
+            width: 60px;
+            background: rgba(255, 215, 0, 0.2);
+            border: 1px solid #ffd700;
+            color: #ffd700;
+            padding: 8px;
+            border-radius: 5px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 16px;
+            text-align: center;
+        }
+        .node-count-container input:focus {
+            outline: none;
+            border-color: #fff;
+            background: rgba(255, 215, 0, 0.3);
+        }
+        .node-count-container .label {
+            position: static;
+            margin: 0;
+            font-size: 24px;
+        }
+        .sliding-element {
+            transition: transform 0.5s ease, opacity 0.5s ease;
+        }
+        .hidden {
+            transform: translateY(-150%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .hidden-bottom {
+            transform: translateY(150%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .mode-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            font-family: 'Orbitron', sans-serif;
+            color: #ffd700;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            z-index: 10;
+            text-align: right;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+        .mode-indicator.visible {
+            opacity: 1;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
     <!-- Load Stats.js first -->
@@ -125,19 +194,23 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 </head>
 <body>
-    <div class="controls">
+    <div class="controls sliding-element">
         <button class="node-btn" data-nodes="1">1</button>
         <button class="node-btn" data-nodes="4">4</button>
         <button class="node-btn active" data-nodes="9">9</button>
         <button onclick="toggleDebug()">Debug</button>
     </div>
-    <div class="audio-controls">
+    <div class="audio-controls sliding-element">
         <button onclick="toggleMusic()">🎵 Toggle Music</button>
     </div>
-    <div class="mode-switch">
-        <button onclick="toggleVisualizationMode()">🔄 Switch Mode</button>
+    <div class="microphone-control sliding-element">
+        <button onclick="toggleMicrophone()">🎤 Toggle Microphone</button>
     </div>
-    <div class="label" id="label">Kn = 9</div>
+    <div class="node-count-container sliding-element">
+        <div class="label" id="label">Kn = </div>
+        <input type="number" id="nodeCount" min="3" max="200" value="69">
+    </div>
+    <div class="mode-indicator">Mode: Classic</div>
     <div id="debug"></div>
     
     <script>
@@ -562,46 +635,64 @@
                 }
             }
 
-            // Add microphone button
-            const micButton = document.createElement('button');
-            micButton.textContent = '🎤 Toggle Microphone';
-            micButton.style.position = 'fixed';
-            micButton.style.top = '80px';
-            micButton.style.right = '20px';
-            micButton.style.zIndex = '10';
-            micButton.style.background = 'rgba(255, 215, 0, 0.2)';
-            micButton.style.border = '1px solid #ffd700';
-            micButton.style.color = '#ffd700';
-            micButton.style.padding = '10px';
-            micButton.style.cursor = 'pointer';
-            micButton.style.borderRadius = '5px';
-            micButton.style.fontFamily = 'Orbitron, sans-serif';
-            document.body.appendChild(micButton);
+            // Update UI controls visibility
+            let controlsTimeout;
+            const topControls = document.querySelectorAll('.controls, .audio-controls, .microphone-control');
+            const bottomControls = document.querySelectorAll('.node-count-container');
+            const modeIndicator = document.querySelector('.mode-indicator');
 
-            micButton.addEventListener('click', async () => {
-                if (!isMicrophoneActive) {
-                    await setupMicrophone();
-                    micButton.style.background = '#ffd700';
-                    micButton.style.color = '#0d041a';
-                } else {
-                    isMicrophoneActive = false;
-                    micButton.style.background = 'rgba(255, 215, 0, 0.2)';
-                    micButton.style.color = '#ffd700';
+            function showControls() {
+                clearTimeout(controlsTimeout);
+                topControls.forEach(element => {
+                    element.classList.remove('hidden');
+                });
+                bottomControls.forEach(element => {
+                    element.classList.remove('hidden-bottom');
+                });
+                modeIndicator.classList.add('visible');
+                controlsTimeout = setTimeout(hideControls, 3000);
+            }
+
+            function hideControls() {
+                topControls.forEach(element => {
+                    element.classList.add('hidden');
+                });
+                bottomControls.forEach(element => {
+                    element.classList.add('hidden-bottom');
+                });
+                modeIndicator.classList.remove('visible');
+            }
+
+            // Add space bar handler for mode switching
+            document.addEventListener('keydown', (event) => {
+                if (event.code === 'Space' && !event.repeat) {
+                    event.preventDefault(); // Prevent page scrolling
+                    toggleVisualizationMode();
                 }
             });
-
-            // Graph data
-            let graph = { nodes: [], edges: [] };
-            let nodeSprites = [];
-            let edgeLines = [];
-            let nodeTrails = []; // Array to store node trails
-
-            let isClassicMode = true; // Track current visualization mode
 
             // Function to toggle between visualization modes
             function toggleVisualizationMode() {
                 isClassicMode = !isClassicMode;
-                renderGraph(); // Re-render with new mode
+                
+                // Update mode indicator
+                modeIndicator.textContent = `Mode: ${isClassicMode ? 'Classic' : 'Fluid'}`;
+                modeIndicator.classList.add('visible');
+                clearTimeout(controlsTimeout);
+                controlsTimeout = setTimeout(hideControls, 3000);
+                
+                // Clear existing graph
+                nodeSprites.forEach(sprite => scene.remove(sprite));
+                edgeLines.forEach(line => scene.remove(line));
+                nodeTrails.forEach(trail => scene.remove(trail));
+                
+                nodeSprites = [];
+                edgeLines = [];
+                nodeTrails = [];
+                
+                // Regenerate with current node count
+                generateCompleteGraph(parseInt(nodeCountInput.value));
+                renderGraph();
             }
 
             // Create node sprite with error checking
@@ -1140,6 +1231,7 @@
             nodeCountInput.addEventListener('change', () => {
                 const n = Math.min(200, Math.max(10, parseInt(nodeCountInput.value) || 69));
                 nodeCountInput.value = n;
+                document.getElementById('label').textContent = `Kn = `;
                 generateCompleteGraph(n);
                 renderGraph();
             });
@@ -1243,33 +1335,6 @@
                 waveCtx.strokeStyle = '#ffd700';
                 waveCtx.stroke();
             }
-
-            // Hide controls and show on mouse movement
-            const slidingControls = document.querySelector('.controls');
-            const audioControls = document.querySelector('.audio-controls');
-            let controlsVisible = true;
-            let hideTimeout;
-
-            function showControls() {
-                clearTimeout(hideTimeout);
-                if (!controlsVisible) {
-                    slidingControls.style.transform = 'translateY(0)';
-                    audioControls.style.transform = 'translateY(0)';
-                    controlsVisible = true;
-                }
-                hideTimeout = setTimeout(hideControls, 3000);
-            }
-
-            function hideControls() {
-                slidingControls.style.transform = 'translateY(-100%)';
-                audioControls.style.transform = 'translateY(-100%)';
-                controlsVisible = false;
-            }
-
-            document.addEventListener('mousemove', showControls);
-
-            // Initial hide
-            hideControls();
 
         } catch (error) {
             log('Critical error: ' + error.message);
