@@ -1,5 +1,6 @@
 import { getAudioLevels } from './audio.js';
 import { updateNodePositions } from './graph.js';
+// THREE is available globally via CDN
 
 // Core visualization state
 export const visualizationState = {

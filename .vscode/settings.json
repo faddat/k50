@@ -1,0 +1,40 @@
+{
+  "liveServer.settings.donotShowInfoMsg": true,
+  "liveServer.settings.donotVerifyTags": true,
+  "liveServer.settings.CustomBrowser": "chrome",
+  "liveServer.settings.NoBrowser": false,
+  "liveServer.settings.ignoreFiles": [
+    ".vscode/**",
+    "**/*.scss",
+    "**/*.sass",
+    "**/*.ts"
+  ],
+  "liveServer.settings.mount": [
+    ["/", "./"]
+  ],
+  "liveServer.settings.useLocalIp": false,
+  "liveServer.settings.wait": 100,
+  "liveServer.settings.host": "127.0.0.1",
+  "liveServer.settings.port": 5500,
+  "liveServer.settings.root": "/",
+  "liveServer.settings.file": "index.html",
+  "liveServer.settings.https": {
+    "enable": false,
+    "cert": "",
+    "key": "",
+    "passphrase": ""
+  },
+  "liveServer.settings.proxy": {
+    "enable": false,
+    "baseUri": "/",
+    "proxyUri": "http://127.0.0.1:5500"
+  },
+  "liveServer.settings.ChromeDebuggingAttachment": false,
+  "liveServer.settings.mimeTypes": {
+    "css": "text/css",
+    "html": "text/html",
+    "js": "application/javascript",
+    "mjs": "application/javascript",
+    "json": "application/json"
+  }
+} 

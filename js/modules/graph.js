@@ -4,7 +4,7 @@ import {
     createEdgeMaterial,
     updateGraphState,
 } from './visualization.js';
-import * as THREE from 'three';
+// THREE is available globally via CDN
 
 // Graph state
 const state = {

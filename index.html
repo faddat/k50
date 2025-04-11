@@ -4,11 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>K50 Visualization</title>
-    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" type="text/css" href="./public/css/styles.css" />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet" />
-    <!-- Load dependencies in head to ensure they're available before our modules -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    <script src="https://raw.githubusercontent.com/mrdoob/stats.js/master/build/stats.min.js"></script>
   </head>
   <body>
     <div class="controls">
@@ -35,44 +32,26 @@
     <div id="debug"></div>
 
     <!-- Initialize app -->
-    <script>
-      // Load Stats.js manually since GitHub raw content doesn't work directly
-      function loadScript(url) {
-        return new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = url;
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-      }
-
-      // Try multiple CDN sources for Stats.js
-      async function loadStats() {
-        const sources = [
-          'https://mrdoob.github.io/stats.js/build/stats.min.js',
-          'https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.js',
-          'https://raw.githack.com/mrdoob/stats.js/master/build/stats.min.js',
-        ];
-
-        for (const source of sources) {
-          try {
-            await loadScript(source);
-            if (typeof Stats !== 'undefined') {
-              console.log('Stats.js loaded successfully');
-              return true;
-            }
-          } catch (error) {
-            console.warn(`Failed to load Stats.js from ${source}`);
-          }
-        }
-        return false;
-      }
-    </script>
-
     <script type="module">
-      import { initApp, toggleDebug, handleNodeCountChange } from './js/modules/app.js';
-      import { handleMicrophoneToggle, handleMusicToggle } from './js/modules/controls.js';
+      // Import Three.js as a module
+      import * as THREE from './public/js/lib/three.module.js';
+      
+      // Make THREE available globally for legacy code
+      window.THREE = THREE;
+      
+      // Load Stats.js
+      const statsScript = document.createElement('script');
+      statsScript.src = './public/js/lib/stats.min.js';
+      document.head.appendChild(statsScript);
+
+      // Wait for Stats.js to load
+      await new Promise(resolve => {
+        statsScript.onload = resolve;
+      });
+
+      // Import and initialize our app
+      const { initApp, toggleDebug, handleNodeCountChange } = await import('./public/js/modules/app.js');
+      const { handleMicrophoneToggle, handleMusicToggle } = await import('./public/js/modules/controls.js');
 
       // Create global namespace for the app
       window.K50 = {
@@ -82,14 +61,16 @@
         handleMusicToggle,
       };
 
-      // Initialize the app when the window loads
-      window.addEventListener('load', () => {
+      // Initialize when everything is ready
+      window.addEventListener('load', async () => {
         try {
-          initApp();
+          console.log('Starting app initialization...');
+          await initApp();
+          console.log('App initialized successfully');
         } catch (error) {
           console.error('Failed to initialize app:', error);
         }
       });
     </script>
   </body>
-</html>
+</html> 
