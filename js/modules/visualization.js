@@ -64,7 +64,7 @@ export function toggleMode() {
     return state.isClassicMode;
 }
 
-// Create node sprite
+// Create node sprite with enhanced glow
 export function createNodeSprite(color) {
     try {
         const canvas = document.createElement('canvas');
@@ -76,38 +76,45 @@ export function createNodeSprite(color) {
             throw new Error('Could not get 2D context');
         }
 
-        if (state.isClassicMode) {
-            // Classic mode: Enhanced dot with stronger glow
-            const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-            gradient.addColorStop(0, color);
-            gradient.addColorStop(0.2, color);
-            gradient.addColorStop(0.4, color);
-            gradient.addColorStop(0.6, color.replace(')', ', 0.7)'));
-            gradient.addColorStop(0.8, color.replace(')', ', 0.3)'));
-            gradient.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 256, 256);
+        // Create base glow
+        const baseGlow = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+        baseGlow.addColorStop(0, '#ffffff');
+        baseGlow.addColorStop(0.2, color);
+        baseGlow.addColorStop(0.4, color);
+        baseGlow.addColorStop(0.6, color.replace(')', ', 0.8)'));
+        baseGlow.addColorStop(0.8, color.replace(')', ', 0.4)'));
+        baseGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = baseGlow;
+        ctx.fillRect(0, 0, 256, 256);
 
-            // Add central bright spot for extra pop
-            const centerGlow = ctx.createRadialGradient(128, 128, 0, 128, 128, 30);
-            centerGlow.addColorStop(0, '#ffffff');
-            centerGlow.addColorStop(0.5, color.replace(')', ', 0.8)'));
-            centerGlow.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = centerGlow;
-            ctx.fillRect(0, 0, 256, 256);
-        } else {
-            // Fluid mode: Larger, more diffuse glow with enhanced brightness
-            const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-            gradient.addColorStop(0, '#ffffff');
-            gradient.addColorStop(0.2, color);
-            gradient.addColorStop(0.4, color);
-            gradient.addColorStop(0.6, color.replace(')', ', 0.6)'));
-            gradient.addColorStop(0.8, color.replace(')', ', 0.3)'));
-            gradient.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 256, 256);
-        }
-        
+        // Add intense core
+        const coreGlow = ctx.createRadialGradient(128, 128, 0, 128, 128, 40);
+        coreGlow.addColorStop(0, '#ffffff');
+        coreGlow.addColorStop(0.4, color.replace(')', ', 0.9)'));
+        coreGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = coreGlow;
+        ctx.fillRect(0, 0, 256, 256);
+
+        // Add outer ethereal glow
+        const outerGlow = ctx.createRadialGradient(128, 128, 60, 128, 128, 128);
+        outerGlow.addColorStop(0, 'rgba(255,255,255,0)');
+        outerGlow.addColorStop(0.5, color.replace(')', ', 0.2)'));
+        outerGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = outerGlow;
+        ctx.fillRect(0, 0, 256, 256);
+
+        // Add sparkle effect
+        const sparkleSize = 20;
+        const sparkleOpacity = 0.4;
+        ctx.fillStyle = `rgba(255,255,255,${sparkleOpacity})`;
+        ctx.beginPath();
+        ctx.moveTo(128, 128 - sparkleSize);
+        ctx.lineTo(128 + sparkleSize/3, 128);
+        ctx.lineTo(128, 128 + sparkleSize);
+        ctx.lineTo(128 - sparkleSize/3, 128);
+        ctx.closePath();
+        ctx.fill();
+
         const texture = new THREE.Texture(canvas);
         texture.needsUpdate = true;
         
@@ -130,15 +137,15 @@ export function createEdgeMaterial() {
     if (state.isClassicMode) {
         return new THREE.LineBasicMaterial({
             color: 0xffffff,
-            opacity: 0.8,
+            opacity: 0.4,
             transparent: true,
-            blending: THREE.NormalBlending,
+            blending: THREE.AdditiveBlending,
             linewidth: 1
         });
     } else {
         return new THREE.LineBasicMaterial({
             color: 0xffffff,
-            opacity: 1.0,
+            opacity: 0.6,
             transparent: true,
             blending: THREE.AdditiveBlending,
             linewidth: 20
@@ -184,14 +191,15 @@ function createTrailMaterial(color, opacity = 1) {
     });
 }
 
-// Create lightning material
+// Create lightning material with enhanced glow
 function createLightningMaterial(color, opacity = 1) {
     return new THREE.LineBasicMaterial({
         color: color,
         opacity: opacity,
         transparent: true,
         blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        linewidth: 2
     });
 }
 
@@ -233,7 +241,7 @@ export function updateEffects(effects) {
     // Remove old effects
     state.scene.children = state.scene.children.filter(child => !child.isEffect);
     
-    // Add new trails
+    // Add new trails with enhanced glow
     if (effects.trails) {
         effects.trails.forEach(trail => {
             const geometry = new THREE.BufferGeometry();
@@ -243,19 +251,22 @@ export function updateEffects(effects) {
             ]);
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
-            const trailLine = new THREE.Line(
-                geometry,
-                createTrailMaterial(trail.color, trail.opacity * trail.intensity)
-            );
-            trailLine.isEffect = true;
-            state.scene.add(trailLine);
+            // Create multiple trail layers for enhanced glow
+            [1, 0.7, 0.4, 0.2].forEach((intensity, i) => {
+                const trailLine = new THREE.Line(
+                    geometry.clone(),
+                    createTrailMaterial(trail.color, trail.opacity * intensity * trail.intensity)
+                );
+                trailLine.isEffect = true;
+                trailLine.scale.set(1 + i * 0.3, 1 + i * 0.3, 1);
+                state.scene.add(trailLine);
+            });
         });
     }
     
-    // Add new lightning arcs
+    // Add new lightning arcs with enhanced glow
     if (effects.lightningArcs) {
         effects.lightningArcs.forEach(arc => {
-            // Create main lightning stroke
             const positions = new Float32Array(arc.points.length * 3);
             arc.points.forEach((point, i) => {
                 positions[i * 3] = point.x;
@@ -266,17 +277,15 @@ export function updateEffects(effects) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
-            // Create multiple layers for glow effect
-            [1, 0.7, 0.4].forEach((intensity, i) => {
+            // Create multiple layers with varying intensity and scale
+            [1, 0.8, 0.6, 0.3].forEach((intensity, i) => {
                 const material = createLightningMaterial(
                     arc.color,
                     arc.opacity * intensity * arc.intensity
                 );
-                const line = new THREE.Line(geometry, material);
+                const line = new THREE.Line(geometry.clone(), material);
                 line.isEffect = true;
-                
-                // Scale each layer slightly
-                line.scale.set(1 + i * 0.2, 1 + i * 0.2, 1);
+                line.scale.set(1 + i * 0.25, 1 + i * 0.25, 1);
                 state.scene.add(line);
             });
         });

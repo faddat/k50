@@ -26,7 +26,7 @@
     </div>
     <div class="mode-indicator">Mode: Classic</div>
     <div id="debug"></div>
-
+    
     <!-- Initialize app -->
     <script>
         // Load Stats.js manually since GitHub raw content doesn't work directly
@@ -54,8 +54,8 @@
                     if (typeof Stats !== 'undefined') {
                         console.log('Stats.js loaded successfully');
                         return true;
-                    }
-                } catch (error) {
+            }
+        } catch (error) {
                     console.warn(`Failed to load Stats.js from ${source}`);
                 }
             }

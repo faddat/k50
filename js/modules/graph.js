@@ -112,8 +112,10 @@ function updateClusterCenters() {
             state.clusterPhase = (state.clusterPhase + 0.1) % 1;
             state.transitionProgress = 0;
 
+            // Create more organic patterns with golden ratio
+            const phi = (1 + Math.sqrt(5)) / 2;
             const clusterCount = state.clusterPhase < 0.5 ? 
-                1 + Math.floor(6 * Math.sin(state.clusterPhase * Math.PI) ** 2) : 1;
+                1 + Math.floor(8 * Math.pow(Math.sin(state.clusterPhase * Math.PI * phi), 2)) : 1;
 
             if (!state.nodes.length) return;
 
@@ -129,30 +131,39 @@ function updateClusterCenters() {
                 state.clusterCenters = [];
                 const screenRadius = Math.min(window.innerWidth, window.innerHeight) * 0.35;
                 
+                // Create fibonacci spiral pattern for clusters
                 for (let i = 0; i < clusterCount; i++) {
-                    const hue = (i / clusterCount) * 360;
-                    const angle = (i / clusterCount) * Math.PI * 2;
-                    const radius = screenRadius * (0.3 + 0.7 * safeDivide(i, clusterCount));
+                    const golden = i * phi;
+                    const angle = golden * Math.PI * 2;
+                    const spiralRadius = screenRadius * Math.sqrt(i / clusterCount);
+                    const hue = (golden * 360) % 360;
+                    
                     state.clusterCenters.push({
-                        x: Math.cos(angle) * radius,
-                        y: Math.sin(angle) * radius,
+                        x: Math.cos(angle) * spiralRadius,
+                        y: Math.sin(angle) * spiralRadius,
                         hue: hue,
-                        radius: 150 + (i * 20)
+                        radius: 150 + (spiralRadius * 0.2)
                     });
                 }
 
+                // Enhanced color-based clustering
                 state.nodes.forEach(node => {
-                    let maxSimilarity = -1;
+                    let bestScore = -1;
                     let bestCluster = 0;
                     state.clusterCenters.forEach((center, idx) => {
-                        const similarity = getColorSimilarity(node.hue, center.hue);
-                        if (similarity > maxSimilarity) {
-                            maxSimilarity = similarity;
+                        const colorSimilarity = getColorSimilarity(node.hue, center.hue);
+                        const dx = center.x - node.x;
+                        const dy = center.y - node.y;
+                        const distanceScore = 1 / (1 + Math.sqrt(dx * dx + dy * dy) / screenRadius);
+                        const score = colorSimilarity * 0.7 + distanceScore * 0.3;
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
                             bestCluster = idx;
                         }
                     });
                     node.clusterId = bestCluster;
-                    node.colorSimilarity = maxSimilarity;
+                    node.colorSimilarity = bestScore;
                 });
             }
         }
