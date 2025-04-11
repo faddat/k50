@@ -1,4 +1,4 @@
-import { visualizationState, createNodeSprite, createEdgeMaterial } from './visualization.js';
+import { visualizationState, createNodeSprite, createEdgeMaterial, updateGraphState } from './visualization.js';
 
 // Graph state
 const state = {
@@ -73,6 +73,9 @@ export function generateCompleteGraph(n) {
         }
 
         updateClusterCenters();
+        
+        // Update visualization state with new graph data
+        updateGraphState(state.nodes, state.edges);
 
         const result = createGraphObjects();
         state.isUpdating = false;
@@ -192,7 +195,7 @@ function createGraphObjects() {
         console.log('Created node sprites:', nodeSprites.length);
 
         // Create edge lines
-        state.edges.forEach((edge, index) => {
+        state.edges.forEach((edge, _index) => {
             const sourceNode = state.nodes[edge.source];
             const targetNode = state.nodes[edge.target];
 
@@ -242,8 +245,11 @@ export function updateNodePositions(audioLevels = { bassLevel: 0, midLevel: 0, t
     if (state.isUpdating) return;
     
     try {
+        // Sync visualization mode from global state
+        state.isClassicMode = visualizationState.isClassicMode;
+        
         const now = Date.now();
-        const bounds = Math.min(window.innerWidth, window.innerHeight) * 1.2; // Increased bounds
+        const bounds = Math.min(window.innerWidth, window.innerHeight) * 1.2;
         const audio = processAudioLevels(audioLevels);
         
         // Enhanced audio reactivity
@@ -267,6 +273,19 @@ export function updateNodePositions(audioLevels = { bassLevel: 0, midLevel: 0, t
             const prevX = node.x;
             const prevY = node.y;
             node.lastUpdate = now;
+
+            // Use safeDistance for all distance calculations
+            state.nodes.forEach(other => {
+                if (node === other) return;
+                const dx = other.x - node.x;
+                const dy = other.y - node.y;
+                const dist = safeDistance(dx, dy);
+                
+                // Apply forces using safe distance
+                const force = calculateForce(node, other, dist, audio);
+                node.vx += (dx / dist) * force;
+                node.vy += (dy / dist) * force;
+            });
 
             // Enhanced music-reactive forces
             const nodeEnergy = audio.energy * (1.5 + Math.sin(node.hue / 30 + now / 800));
@@ -315,10 +334,13 @@ export function updateNodePositions(audioLevels = { bassLevel: 0, midLevel: 0, t
             }
         });
 
+        // Update visualization state with new positions
+        updateGraphState(state.nodes, state.edges);
+        
         return {
             trails: state.nodeTrails.map(trail => ({
                 ...trail,
-                opacity: Math.max(0, 1 - (now - trail.timestamp) / 800) // Longer-lasting trails
+                opacity: Math.max(0, 1 - (now - trail.timestamp) / 800)
             })),
             lightningArcs: state.lightningArcs.map(arc => ({
                 ...arc,
@@ -385,42 +407,68 @@ function applyClusterForces(node, audio) {
 }
 
 function applyBoundaryForces(node, bounds, audio) {
-    // Softer, more organic boundaries
-    const padding = 150 * (1 + audio.energy * 0.8);
-    const maxX = bounds / 2 - padding;
-    const maxY = bounds / 2 - padding;
-    const softZone = 200; // Soft boundary zone
+    // Calculate maximum allowed radius with some padding
+    const maxRadius = (bounds / 2) * 0.9; // Reduce to 90% of bounds to ensure visibility
+    const softZone = maxRadius * 0.2; // Soft boundary starts at 80% of max radius
+    const hardZone = maxRadius * 0.1; // Hard boundary at 90% of max radius
     
-    // X-axis soft boundaries
-    if (Math.abs(node.x) > maxX) {
-        const excess = Math.abs(node.x) - maxX;
-        const force = Math.pow(excess / softZone, 2) * (0.1 + audio.energy * 0.15);
-        node.vx -= Math.sign(node.x) * force * node.vx;
-        
-        // Allow some overflow based on velocity and energy
-        if (Math.abs(node.x) > maxX + softZone) {
-            node.x = Math.sign(node.x) * (maxX + softZone);
-        }
-    }
-    
-    // Y-axis soft boundaries
-    if (Math.abs(node.y) > maxY) {
-        const excess = Math.abs(node.y) - maxY;
-        const force = Math.pow(excess / softZone, 2) * (0.1 + audio.energy * 0.15);
-        node.vy -= Math.sign(node.y) * force * node.vy;
-        
-        // Allow some overflow based on velocity and energy
-        if (Math.abs(node.y) > maxY + softZone) {
-            node.y = Math.sign(node.y) * (maxY + softZone);
-        }
-    }
-    
-    // Add slight attraction to center when far out
+    // Calculate distance from center
     const distFromCenter = Math.sqrt(node.x * node.x + node.y * node.y);
-    if (distFromCenter > bounds / 2) {
-        const centerForce = 0.001 * Math.pow(distFromCenter / bounds, 2);
+    
+    // Progressive boundary forces
+    if (distFromCenter > maxRadius - softZone) {
+        // Calculate force based on how far past the boundary we are
+        const excess = distFromCenter - (maxRadius - softZone);
+        const normalizedExcess = excess / softZone;
+        const force = Math.pow(normalizedExcess, 3) * (0.5 + audio.energy * 0.5); // Stronger cubic force
+        
+        // Apply force towards center
+        const angle = Math.atan2(node.y, node.x);
+        const fx = -Math.cos(angle) * force;
+        const fy = -Math.sin(angle) * force;
+        
+        // Add some spiral motion for more organic movement
+        const spiralForce = 0.05 * force;
+        node.vx += fx * node.vx + fy * spiralForce;
+        node.vy += fy * node.vy - fx * spiralForce;
+        
+        // Hard limit at the absolute boundary
+        if (distFromCenter > maxRadius - hardZone) {
+            const limitRadius = maxRadius - hardZone;
+            node.x = Math.cos(angle) * limitRadius;
+            node.y = Math.sin(angle) * limitRadius;
+            
+            // Stronger velocity dampening at boundary
+            node.vx *= 0.7;
+            node.vy *= 0.7;
+        }
+    }
+    
+    // Enhanced center attraction when far out
+    if (distFromCenter > maxRadius * 0.7) { // Start attraction earlier
+        const centerForce = 0.004 * Math.pow(distFromCenter / maxRadius, 4); // Stronger attraction
         node.vx -= node.x * centerForce;
         node.vy -= node.y * centerForce;
+    }
+    
+    // Add some noise to prevent stagnation
+    if (audio.energy > 0.1) {
+        const noise = audio.energy * 0.08; // Reduced noise
+        node.vx += (Math.random() - 0.5) * noise;
+        node.vy += (Math.random() - 0.5) * noise;
+    }
+    
+    // Final safety check - absolute containment
+    const absoluteMaxRadius = bounds / 2;
+    const currentRadius = Math.sqrt(node.x * node.x + node.y * node.y);
+    
+    if (currentRadius > absoluteMaxRadius) {
+        const scale = absoluteMaxRadius / currentRadius;
+        node.x *= scale;
+        node.y *= scale;
+        // Strong inward force
+        node.vx *= -0.5;
+        node.vy *= -0.5;
     }
 }
 
@@ -460,8 +508,8 @@ function createLightningArc(start, end, color, intensity) {
 // Find nodes that can be connected with lightning
 function findConnectableNodes() {
     const nodePairs = [];
-    state.nodes.forEach((node, index) => {
-        state.nodes.slice(index + 1).forEach(other => {
+    state.nodes.forEach((node, _index) => {
+        state.nodes.slice(_index + 1).forEach(other => {
             const dx = other.x - node.x;
             const dy = other.y - node.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -510,6 +558,20 @@ function createNodeTrail(node, prevX, prevY, speed) {
         timestamp: Date.now(),
         intensity: Math.min(1, speed / 20)
     });
+}
+
+// Calculate force between nodes using safe operations
+function calculateForce(node, other, dist, audio) {
+    const baseRepulsion = -2000 * (1 + audio.energy);
+    const colorSimilarity = getColorSimilarity(node.hue, other.hue);
+    const sameCluster = node.clusterId === other.clusterId;
+    
+    const musicClusterEffect = 1 + (audio.energy * 2);
+    const clusterMultiplier = sameCluster ?
+        (0.2 + colorSimilarity) * musicClusterEffect :
+        (2 + (1 - colorSimilarity)) / musicClusterEffect;
+    
+    return (baseRepulsion * clusterMultiplier) / (dist * dist);
 }
 
 // Export state and functions

@@ -1,66 +1,113 @@
-import { toggleMode, isClassicMode } from './visualization.js';
+import { visualizationState } from './visualization.js';
 import { toggleMusic, setupMicrophone, audioState } from './audio.js';
+import { handleNodeCountChange } from './app.js';
 
 // UI state
 const state = {
     controlsTimeout: null,
-    controlsVisible: true
+    controlsVisible: true,
+    modeIndicator: null,
+    debugButton: null,
+    nodeCountInput: null,
+    modeToggle: null
 };
 
-// Initialize UI controls with proper mode handling
-export function initializeControls(initialClassicMode) {
-    // Set initial mode indicator
-    const modeIndicator = document.querySelector('.mode-indicator');
-    if (modeIndicator) {
-        modeIndicator.textContent = `Mode: ${initialClassicMode ? 'Classic' : 'Fluid'}`;
-    }
+// Initialize controls
+export function initControls() {
+    // Cache DOM elements
+    state.debugButton = document.getElementById('debug');
+    state.nodeCountInput = document.getElementById('nodeCount');
+    state.modeToggle = document.getElementById('mode');
+    state.modeIndicator = document.querySelector('.mode-indicator');
+    
+    setupDebugButton();
+    setupNodeCountInput();
+    setupModeToggle();
+    setupControlsVisibility();
+}
 
-    // Initialize controls visibility
+function setupDebugButton() {
+    if (state.debugButton) {
+        state.debugButton.addEventListener('click', () => {
+            document.body.classList.toggle('debug');
+            if (window.stats) {
+                window.stats.dom.style.display = 
+                    document.body.classList.contains('debug') ? 'block' : 'none';
+            }
+        });
+    }
+}
+
+function setupNodeCountInput() {
+    if (state.nodeCountInput) {
+        state.nodeCountInput.addEventListener('change', e => {
+            handleNodeCountChange(parseInt(e.target.value));
+        });
+    }
+}
+
+function setupModeToggle() {
+    if (state.modeToggle) {
+        state.modeToggle.addEventListener('click', () => {
+            toggleVisualizationMode();
+        });
+        
+        // Initialize mode display
+        updateModeDisplay(visualizationState.isClassicMode);
+    }
+}
+
+function toggleVisualizationMode() {
+    visualizationState.isClassicMode = !visualizationState.isClassicMode;
+    updateModeDisplay(visualizationState.isClassicMode);
+    applyModeVisualChanges(visualizationState.isClassicMode);
+}
+
+function updateModeDisplay(isClassic) {
+    if (state.modeToggle) {
+        state.modeToggle.textContent = isClassic ? 'Mode: Classic' : 'Mode: Dynamic';
+        document.body.classList.toggle('classic-mode', isClassic);
+    }
+    
+    if (state.modeIndicator) {
+        state.modeIndicator.textContent = `Mode: ${isClassic ? 'Classic' : 'Dynamic'}`;
+        state.modeIndicator.classList.add('visible');
+        
+        clearTimeout(state.controlsTimeout);
+        state.controlsTimeout = setTimeout(() => {
+            state.modeIndicator.classList.remove('visible');
+        }, 3000);
+    }
+}
+
+function applyModeVisualChanges(isClassic) {
+    if (visualizationState.nodeSprites) {
+        visualizationState.nodeSprites.forEach(sprite => {
+            if (isClassic) {
+                sprite.scale.setScalar(50); // Smaller nodes in classic mode
+            } else {
+                sprite.scale.copy(sprite.userData.originalScale); // Restore original scale
+            }
+        });
+    }
+}
+
+function setupControlsVisibility() {
     const topControls = document.querySelectorAll('.controls, .audio-controls, .microphone-control');
     const bottomControls = document.querySelectorAll('.node-count-container');
-
-    // Update control styles based on mode
-    function updateControlStyles(isClassic) {
-        const controls = [...topControls, ...bottomControls];
-        controls.forEach(control => {
-            control.classList.toggle('classic-mode', isClassic);
-            control.classList.toggle('fluid-mode', !isClassic);
-        });
-    }
-
-    // Initial style update
-    updateControlStyles(initialClassicMode);
-
-    // Add mode change listener
-    document.addEventListener('keydown', event => {
-        if (event.code === 'Space' && !event.repeat) {
-            event.preventDefault();
-            const newMode = toggleMode();
-            updateControlStyles(newMode);
-        }
-    });
-
-    // Show/hide controls functions
+    
     function showControls() {
         clearTimeout(state.controlsTimeout);
-        topControls.forEach(element => {
-            element.classList.remove('hidden');
-        });
-        bottomControls.forEach(element => {
-            element.classList.remove('hidden-bottom');
-        });
-        modeIndicator.classList.add('visible');
+        topControls.forEach(element => element.classList.remove('hidden'));
+        bottomControls.forEach(element => element.classList.remove('hidden-bottom'));
+        if (state.modeIndicator) state.modeIndicator.classList.add('visible');
         state.controlsTimeout = setTimeout(hideControls, 3000);
     }
 
     function hideControls() {
-        topControls.forEach(element => {
-            element.classList.add('hidden');
-        });
-        bottomControls.forEach(element => {
-            element.classList.add('hidden-bottom');
-        });
-        modeIndicator.classList.remove('visible');
+        topControls.forEach(element => element.classList.add('hidden'));
+        bottomControls.forEach(element => element.classList.add('hidden-bottom'));
+        if (state.modeIndicator) state.modeIndicator.classList.remove('visible');
     }
 
     // Event listeners
@@ -77,22 +124,6 @@ export function initializeControls(initialClassicMode) {
 
     // Initialize with hidden controls
     hideControls();
-}
-
-// Handle mode switching
-export function handleModeSwitch() {
-    const newMode = toggleMode();
-    const modeIndicator = document.querySelector('.mode-indicator');
-    
-    // Update mode indicator
-    modeIndicator.textContent = `Mode: ${newMode ? 'Classic' : 'Fluid'}`;
-    modeIndicator.classList.add('visible');
-    
-    // Clear timeout and set new one
-    clearTimeout(state.controlsTimeout);
-    state.controlsTimeout = setTimeout(() => {
-        modeIndicator.classList.remove('visible');
-    }, 3000);
 }
 
 // Handle microphone toggle
