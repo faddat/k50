@@ -9,73 +9,96 @@ const state = {
 
 // Generate complete graph with n nodes
 export function generateCompleteGraph(n) {
-    state.currentNodeCount = n;
-    state.nodes = [];
-    state.edges = [];
+    console.log('Generating complete graph with', n, 'nodes');
+    
+    try {
+        state.currentNodeCount = n;
+        state.nodes = [];
+        state.edges = [];
 
-    // Create nodes
-    for (let i = 0; i < n; i++) {
-        const angle = (i / n) * Math.PI * 2;
-        const radius = 300;
-        state.nodes.push({
-            id: i,
-            x: Math.cos(angle) * radius,
-            y: Math.sin(angle) * radius,
-            vx: 0,
-            vy: 0
-        });
-    }
-
-    // Create edges (complete graph: every node connected to every other node)
-    for (let i = 0; i < n; i++) {
-        for (let j = i + 1; j < n; j++) {
-            state.edges.push({
-                source: i,
-                target: j
+        // Create nodes
+        for (let i = 0; i < n; i++) {
+            const angle = (i / n) * Math.PI * 2;
+            const radius = 300;
+            state.nodes.push({
+                id: i,
+                x: Math.cos(angle) * radius,
+                y: Math.sin(angle) * radius,
+                vx: 0,
+                vy: 0
             });
         }
-    }
 
-    return createGraphObjects();
+        // Create edges (complete graph: every node connected to every other node)
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                state.edges.push({
+                    source: i,
+                    target: j
+                });
+            }
+        }
+
+        console.log('Created graph structure:', {
+            nodes: state.nodes.length,
+            edges: state.edges.length
+        });
+
+        return createGraphObjects();
+    } catch (error) {
+        console.error('Error generating complete graph:', error);
+        throw error;
+    }
 }
 
 // Create Three.js objects for nodes and edges
 function createGraphObjects() {
-    const nodeSprites = [];
-    const edgeLines = [];
+    console.log('Creating graph objects...');
+    
+    try {
+        const nodeSprites = [];
+        const edgeLines = [];
 
-    // Create node sprites
-    state.nodes.forEach((node, i) => {
-        const hue = (i / state.nodes.length);
-        const color = `hsl(${hue * 360}, 100%, 50%)`;
-        const sprite = createNodeSprite(color);
-        sprite.position.set(node.x, node.y, 0);
-        sprite.scale.set(50, 50, 1);
-        nodeSprites.push(sprite);
-    });
+        // Create node sprites
+        state.nodes.forEach((node, i) => {
+            const hue = (i / state.nodes.length);
+            const color = `hsl(${hue * 360}, 100%, 50%)`;
+            const sprite = createNodeSprite(color);
+            sprite.position.set(node.x, node.y, 0);
+            sprite.scale.set(50, 50, 1);
+            nodeSprites.push(sprite);
+        });
 
-    // Create edge lines
-    state.edges.forEach(edge => {
-        const sourceNode = state.nodes[edge.source];
-        const targetNode = state.nodes[edge.target];
+        console.log('Created node sprites:', nodeSprites.length);
 
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array([
-            sourceNode.x, sourceNode.y, 0,
-            targetNode.x, targetNode.y, 0
-        ]);
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        // Create edge lines
+        state.edges.forEach((edge, index) => {
+            const sourceNode = state.nodes[edge.source];
+            const targetNode = state.nodes[edge.target];
 
-        // Create main line and glow line
-        const mainLine = new THREE.Line(geometry, createEdgeMaterial());
-        edgeLines.push(mainLine);
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array([
+                sourceNode.x, sourceNode.y, 0,
+                targetNode.x, targetNode.y, 0
+            ]);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-        const glowLine = new THREE.Line(geometry.clone(), createEdgeMaterial());
-        glowLine.material.linewidth = 3;
-        edgeLines.push(glowLine);
-    });
+            // Create main line and glow line
+            const mainLine = new THREE.Line(geometry, createEdgeMaterial());
+            edgeLines.push(mainLine);
 
-    return { nodeSprites, edgeLines };
+            const glowLine = new THREE.Line(geometry.clone(), createEdgeMaterial());
+            glowLine.material.linewidth = 3;
+            edgeLines.push(glowLine);
+        });
+
+        console.log('Created edge lines:', edgeLines.length);
+
+        return { nodeSprites, edgeLines };
+    } catch (error) {
+        console.error('Error creating graph objects:', error);
+        throw error;
+    }
 }
 
 // Update node positions based on forces

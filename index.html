@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
     <!-- Load dependencies in head to ensure they're available before our modules -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js"></script>
+    <script src="https://raw.githubusercontent.com/mrdoob/stats.js/master/build/stats.min.js"></script>
 </head>
 <body>
     <div class="controls sliding-element">
@@ -28,6 +28,41 @@
     <div id="debug"></div>
 
     <!-- Initialize app -->
+    <script>
+        // Load Stats.js manually since GitHub raw content doesn't work directly
+        function loadScript(url) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = url;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        // Try multiple CDN sources for Stats.js
+        async function loadStats() {
+            const sources = [
+                'https://mrdoob.github.io/stats.js/build/stats.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.js',
+                'https://raw.githack.com/mrdoob/stats.js/master/build/stats.min.js'
+            ];
+
+            for (const source of sources) {
+                try {
+                    await loadScript(source);
+                    if (typeof Stats !== 'undefined') {
+                        console.log('Stats.js loaded successfully');
+                        return true;
+                    }
+                } catch (error) {
+                    console.warn(`Failed to load Stats.js from ${source}`);
+                }
+            }
+            return false;
+        }
+    </script>
+
     <script type="module">
         // Create global namespace for our app
         window.K50 = {
@@ -35,16 +70,17 @@
             handlers: {}
         };
 
-        // Initialize Stats after ensuring it's loaded
-        if (typeof Stats !== 'undefined') {
-            window.K50.Stats = new Stats();
-        } else {
-            console.error('Stats.js not loaded properly');
-        }
-
-        // Import and initialize app
+        // Initialize app after ensuring Stats.js is loaded
         async function initializeApp() {
             try {
+                // Try to load Stats.js
+                const statsLoaded = await loadStats();
+                if (statsLoaded) {
+                    window.K50.Stats = new Stats();
+                } else {
+                    console.error('Failed to load Stats.js from all sources');
+                }
+
                 const { initApp, toggleDebug, handleNodeCountChange } = await import('./js/modules/app.js');
                 const { handleMusicToggle, handleMicrophoneToggle } = await import('./js/modules/controls.js');
 

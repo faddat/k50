@@ -1,4 +1,4 @@
-import { visualizationState } from './visualization.js';
+import { initVisualization, visualizationState } from './visualization.js';
 import { audioState, getAudioLevels } from './audio.js';
 import { graphState, generateCompleteGraph, updateNodePositions } from './graph.js';
 
@@ -6,7 +6,8 @@ import { graphState, generateCompleteGraph, updateNodePositions } from './graph.
 const state = {
     isDebugMode: false,
     stats: null,
-    animationFrame: null
+    animationFrame: null,
+    initialized: false
 };
 
 // Initialize debug stats
@@ -75,11 +76,37 @@ function animate() {
 // Initialize app
 export function initApp() {
     try {
+        console.log('Initializing app...');
+        
+        // Initialize visualization first
+        const viz = initVisualization();
+        console.log('Visualization state:', viz);
+
+        // Initialize stats
         initStats();
-        generateCompleteGraph(69);
+        
+        // Generate initial graph
+        console.log('Generating initial graph...');
+        const { nodeSprites, edgeLines } = generateCompleteGraph(69);
+        
+        // Add objects to scene
+        console.log('Adding objects to scene...');
+        nodeSprites.forEach(sprite => visualizationState.scene.add(sprite));
+        edgeLines.forEach(line => visualizationState.scene.add(line));
+        
+        // Store in visualization state
+        visualizationState.nodeSprites = nodeSprites;
+        visualizationState.edgeLines = edgeLines;
+        
+        // Start animation loop
+        console.log('Starting animation loop...');
         animate();
+        
+        state.initialized = true;
+        console.log('App initialized successfully');
     } catch (error) {
         console.error('Error initializing app:', error);
+        throw error; // Re-throw to show in console
     }
 }
 
